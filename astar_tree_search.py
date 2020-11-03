@@ -320,7 +320,6 @@ def RNNGuidedAstar(x0_apex,
   steps = path_from_parent(goal_node)
   return steps
 
-
 def footSpaceAStar(x0_apex,
                    goal,
                    step_controller,
@@ -328,6 +327,7 @@ def footSpaceAStar(x0_apex,
                    friction,
                    num_samples,
                    horizon,
+                   spacing,
                    cost_fn):
   # initialize all the shits
   pq = queue.PriorityQueue()
@@ -353,7 +353,7 @@ def footSpaceAStar(x0_apex,
     if cur_node.x_loc > deepest_node.x_loc:
       deepest_node = cur_node
 
-    next_samples = np.arange(cur_node.x_loc - horizon/2, cur_node.x_loc + horizon/2, 0.1)
+    next_samples = np.arange(cur_node.x_loc - horizon/2, cur_node.x_loc + horizon/2, spacing)
     next_apexes = []
     last_flights = []
     for sample in next_samples:
@@ -394,6 +394,9 @@ def footSpaceAStar(x0_apex,
       num_goal_nodes += 1
       goal_node = cur_node
 
+  if get_full_tree:
+    all_paths, all_angles = inOrderHelper(root_node, goal[0])
+    return all_paths, all_angles
   if num_goal_nodes == 0:
     return path_from_parent(deepest_node)
 
