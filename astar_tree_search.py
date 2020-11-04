@@ -285,7 +285,7 @@ def RNNGuidedAstar(x0_apex,
     distribution = softmaxes[-1].cpu().detach().numpy()[0][0]
     next_samples = discrete_sampling(distribution, num_samples, min = -3, max = 8)
     for sample in next_samples:
-      input = step_controller.calcAngle(sample, cur_apex[2], 0, 0)
+      input = step_controller.calcAngle(sample, cur_apex[2], 0, 0, y = cur_apex[1])
       apex1, apex2, last_flight = hopper.getNextState2(cur_apex,
                                                       input,
                                                       terrain_func,
