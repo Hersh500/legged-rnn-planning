@@ -8,7 +8,7 @@ class DeadbeatNet(nn.Module):
     def __init__(self):
         super(DeadbeatNet, self).__init__()
         self.layers = nn.Sequential(
-            torch.nn.Linear(2, 10),
+            torch.nn.Linear(3, 10),
             torch.nn.ReLU(),
             torch.nn.Linear(10, 1))
       
@@ -29,9 +29,10 @@ class DeadbeatStepController:
         return xdot_des
 
     # The extra parameters are for drop-in swappability with StepController
-    def calcAngle(self, Lstep, xdot, Ts, Tf, upper_lim = 2.0, lower_lim = 1.0):
+    def calcAngle(self, Lstep, xdot, Ts, Tf, upper_lim = 2.0, lower_lim = 1.0, y = 1.0):
         # xdot_des = self.getVelDes(Lstep, xdot, Ts, Tf)
-        point = torch.from_numpy(np.array([xdot, Lstep])).float().to(self.device)
+        # THIS Y IS NECESSARY FOR ACCURACY!
+        point = torch.from_numpy(np.array([xdot, y, Lstep])).float().to(self.device)
         leg_angle = self.deadbeat_net(point).detach().cpu().numpy()[0]
         # some saturation
         if leg_angle > upper_lim:
