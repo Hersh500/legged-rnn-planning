@@ -322,6 +322,61 @@ def getNextState(x_flight, u, terrain_func):
     return True, foot_pos[0], flight_states[len(flight_states)-1], apex_state
 
 
+def getNextState2Count(x_flight, input_angle, terrain_func, terrain_normal_func = None, friction = None,
+                  at_apex = False):
+  count = 0
+  code, flight_states, _ = simulateOneFlightPhaseODE(None, 
+                                                        x_init = x_flight,
+                                                        debug = True,
+                                                        u= input_angle,
+                                                        terrain_func = terrain_func,
+                                                        print_fails = False,
+                                                        hit_apex = at_apex)
+  count += len(flight_states)
+  if code < 0:
+    return None, None, None, count
+
+  if at_apex:
+    first_apex = x_flight
+  else:
+    for i in range (len(flight_states)-1):
+        if flight_states[i+1][3] <= 0 and flight_states[i][3] >= 0:
+            apex_state = flight_states[i]
+            first_apex = apex_state
+            break
+  
+  last_flight_state = flight_states[len(flight_states)-1]
+  foot_pos = getFootXYInFlight(last_flight_state)
+  first_step_loc = foot_pos[0]
+  code, stance_states, _ = simulateOneStancePhase(last_flight_state,
+                                                      terrain_func = terrain_func,
+                                                      print_fails = False,
+                                                      terrain_normal_func = terrain_normal_func,
+                                                      friction = friction)
+  count += len(stance_states)
+  if code < 0:
+    return None, None, None, count
+  last_stance_state = stance_states[len(stance_states) - 1]
+  x_flight = stanceToFlight(last_stance_state, foot_pos)
+  
+  # simulate one more flight phase to check for collision (for robustness)
+  code, flight_states, _ = simulateOneFlightPhaseODE(None, 
+                                                        x_init = x_flight,
+                                                        debug = True,
+                                                        u= np.pi/2,
+                                                        terrain_func = terrain_func,
+                                                        print_fails = False)
+  second_step = flight_states[-1][0]
+  count += len(flight_states)
+  if code < 0:
+    return None, None, None, count
+  for i in range (len(flight_states)-1):
+    if flight_states[i+1][3] <= 0 and flight_states[i][3] >= 0:
+      apex_state = flight_states[i]
+      second_apex = apex_state
+      break
+  return first_apex, second_apex, flight_states[-1], count
+
 def getNextState2(x_flight, input_angle, terrain_func, terrain_normal_func = None, friction = None,
                   at_apex = False):
   code, flight_states, _ = simulateOneFlightPhaseODE(None, 

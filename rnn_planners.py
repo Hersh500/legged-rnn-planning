@@ -24,20 +24,21 @@ class RNNAStarPlanner:
     self.cost_fn = costFn
 
   def predict(self, initial_apex, terrain_func, friction, goal, 
-              use_fallback = False, timeout = 1000):
+              use_fallback = False, timeout = 1000, debug = False):
     if use_fallback:
         num_samples = self.fallback_samples
     else:
         num_samples = self.num_samples
-    step_sequence = astar_tree_search.RNNGuidedAstar(initial_apex,
+    step_sequence, count = astar_tree_search.RNNGuidedAstar(initial_apex,
                                                      goal,
                                                      self.rnn_planner,
                                                      self.step_controller,
                                                      terrain_func,
                                                      friction,
                                                      num_samples,
-                                                     self.cost_fn)
-    return step_sequence, []
+                                                     self.cost_fn,
+                                                     debug = debug)
+    return step_sequence, [], count
 
 
 '''

@@ -24,7 +24,7 @@ class AStarPlanner:
             num_samples = self.fallback_samples
         else:
             num_samples = self.num_samples
-        step_sequences, angle_sequences = aStarHelper(initial_apex,
+        step_sequences, angle_sequences, count = aStarHelper(initial_apex,
                                                       goal, 1,
                                                       terrain_func,
                                                       lambda x: np.pi/2,
@@ -33,11 +33,12 @@ class AStarPlanner:
                                                       timeout = timeout,
                                                       neutral_angle = False,
                                                       max_speed = self.max_speed,
-                                                      cost_fn = self.cost_fn)
+                                                      cost_fn = self.cost_fn,
+                                                      count_odes = True)
         if len(step_sequences) > 0:
-            return step_sequences[0], angle_sequences[0]
+            return step_sequences[0], angle_sequences[0], count
         else:
-            return [], []
+            return [], [], count
 
 
 '''

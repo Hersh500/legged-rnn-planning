@@ -3,7 +3,7 @@ import numpy as np
 import hopper
 import astar_tree_search
 from astar_tree_search import aStarHelper
-from astar_tree_search import footSpaceAStar 
+# from astar_tree_search import footSpaceAStar 
 import terrain_utils
 
 
@@ -150,7 +150,7 @@ def generateRandomSequences(num_terrains,
                                               friction,
                                               num_angle_samples = 30,
                                               timeout = 500,
-                                              max_speed = 2.5,
+                                              max_speed = 4,
                                               get_full_tree = full_tree,
                                               neutral_angle = False,
                                               cost_fn = cost_fn)
@@ -161,7 +161,7 @@ def generateRandomSequences(num_terrains,
             if cond:
               success_count += 1
               initial_condition = this_arr + list(initial_apex[:3])
-              sequences.append(ss)
+              sequences.append(processSeq(ss, 0.2, 0.2, terrain_functions[i]))
               initial_states.append(initial_condition)
           num_tries += 1
         # if A* doesn't find enough seqs just try to generate some feasible plan of steps, even if it doesn't reach goal.

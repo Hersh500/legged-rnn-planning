@@ -214,7 +214,7 @@ def stackDataforConvNet(input_seqs, oh_dim = 110, forward_terrain_dim = 80):
 
 '''
     Evaluate StepSequenceModelConv on a terrain + apex scenario
-    TODO: implement temperature scaling on the logits, for softmax sampling 
+    TODO: beautify this code it looks disgusting
 '''
 def evaluateConvModel(model, n, initial_apex, first_step, terrain_list, device, T=1):
   datapoint = np.array(initial_apex[:3])

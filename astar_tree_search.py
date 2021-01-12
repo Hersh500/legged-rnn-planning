@@ -67,10 +67,12 @@ def sampleLegAngles(x_apex, goal, step, terrain_func, terrain_normal_func, frict
   apexes = []
   locs = []
   last_flights = []
+  total_count = 0
 
   # try gaussian sampling around the neutral point
   mean = np.arccos(x_apex[2] * 0.18 / 2)
   cov = (max_limit - min_limit)/cov_factor
+
   if neutral_angle_normal:
     pos = np.random.randn(num_samples) * cov + mean
   else:
@@ -78,12 +80,13 @@ def sampleLegAngles(x_apex, goal, step, terrain_func, terrain_normal_func, frict
     # pos = np.random.rand(num_samples) * (max_limit - min_limit) + min_limit
     pos = sorted(pos)
   for i in range(len(pos)):
-    apex1, apex2, last_flight = hopper.getNextState2(x_apex,
+    apex1, apex2, last_flight, count = hopper.getNextState2Count(x_apex,
                                                     pos[i],
                                                     terrain_func,
                                                     terrain_normal_func,
                                                     friction,
                                                     at_apex = True)
+    total_count += count
     if apex1 is not None:
       last_flights.append(last_flight)
       # cost = stateCost_neighbors(last_flight, [], goal, step + 1)
@@ -105,7 +108,7 @@ def sampleLegAngles(x_apex, goal, step, terrain_func, terrain_normal_func, frict
     cost = cost_fn(last_flights[i], neighbors, goal, step + 1)
     costs.append(cost)
 
-  return angles, costs, apexes, locs
+  return angles, costs, apexes, locs, total_count
 
 
 # Performs an In-order traversal through the treeeeeeeee
@@ -135,7 +138,7 @@ def aStarHelper(x0_apex, goal, num_goal_nodes,
                 terrain_func, terrain_normal_func, friction,
                 num_angle_samples, timeout = 1000, get_full_tree = False,
                 cov_factor = 4, neutral_angle = True, max_speed = 2,
-                cost_fn = stateCost):
+                cost_fn = stateCost, count_odes = False):
 
   time_till_ground = 2 * (x0_apex[1] - hopper.constants.L)/(-hopper.constants.g)
   xstep_pred = x0_apex[0] + x0_apex[2] * time_till_ground
@@ -151,6 +154,8 @@ def aStarHelper(x0_apex, goal, num_goal_nodes,
   step = 0
   goal_nodes = []
   iters = 0
+  total_odes = 0
+
   while len(goal_nodes) < num_goal_nodes and iters < timeout:
     if cur_node.x_loc > deepest_node.x_loc:
       deepest_node = cur_node
@@ -160,16 +165,17 @@ def aStarHelper(x0_apex, goal, num_goal_nodes,
       cur_apex = cur_node.apex
       step = cur_node.step + 1
     else:
-      angles, costs, apexes, locs = sampleLegAngles(cur_apex, goal, step, terrain_func, 
+      angles, costs, apexes, locs, count = sampleLegAngles(cur_apex, goal, step, terrain_func, 
                                                     terrain_normal_func, friction, num_angle_samples,
                                                     cov_factor = cov_factor, neutral_angle_normal = neutral_angle,
                                                     cost_fn = cost_fn)
+      total_odes += count
       for i in range(0, len(angles)):
         # angles was the angle used from the previous node to get to this node.
         if np.abs(apexes[i][2]) <= max_speed:
           node = GraphNode(locs[i], angles[i], apexes[i], step, costs[i] + cur_node.value, cur_node, [])
           cur_node.children.append(node)
-          node_queue.put((node.value, node))
+          node_queue.put((costs[i], node))
 
       if node_queue.qsize() <= 0:
         break
@@ -192,7 +198,10 @@ def aStarHelper(x0_apex, goal, num_goal_nodes,
   # traverse the whole tree
   if get_full_tree:
     all_paths, all_angles = inOrderHelper(root_node, goal[0])
-    return all_paths, all_angles
+    if count_odes:
+      return all_paths, all_angles, total_odes
+    else:
+      return all_paths, all_angles
   else:
     for cur_node in goal_nodes:
       traj = [cur_node.x_loc]
@@ -205,7 +214,10 @@ def aStarHelper(x0_apex, goal, num_goal_nodes,
       angles = list(reversed(angles))
       sequences.append(traj)
       inputs.append(angles)
-    return sequences, inputs
+    if count_odes:
+      return sequences, inputs, total_odes
+    else:
+      return sequences, inputs
 
 
 ### RNN Guided A* Utilities ###
@@ -217,6 +229,12 @@ def path_from_parent(node):
     node = node.parent
   return steps[::-1]
 
+def path_from_parent2(node):
+  steps = []
+  while node is not None:
+    steps.append(node.x_loc[1])
+    node = node.parent
+  return steps[::-1]
 
 # sample from a 1D distribution
 def discrete_sampling(distribution, num_samples,
@@ -234,6 +252,8 @@ def discrete_sampling(distribution, num_samples,
   return output_samples
 
 
+# Currently using controller inputs instead of true location inputs
+# TODO: return/print some debugging information, or something like that.
 def RNNGuidedAstar(x0_apex,
                    goal,
                    rnn_planner,
@@ -241,7 +261,8 @@ def RNNGuidedAstar(x0_apex,
                    terrain_func,
                    friction,
                    num_samples,
-                   cost_fn):
+                   cost_fn,
+                   debug = False):
   # initialize all the shits
   pq = queue.PriorityQueue()
   nodes = []
@@ -253,6 +274,7 @@ def RNNGuidedAstar(x0_apex,
   Ts = 0.17
   Tf = 0.60
   step = 0
+  total_odes = 0
 
   cur_node = GraphNode(x0_apex[0], 0, x0_apex, 0, 0, None, [])
   deepest_node = cur_node
@@ -260,10 +282,13 @@ def RNNGuidedAstar(x0_apex,
   time_till_ground = 2 * (x0_apex[1] - hopper.constants.L)/(-hopper.constants.g)
   xstep_pred = x0_apex[0] + x0_apex[2] * time_till_ground
 
-  cur_node.x_loc = xstep_pred
+  cur_node.x_loc = (xstep_pred, xstep_pred)
 
   while num_goal_nodes == 0 and iters < timeout:
-    if cur_node.x_loc > deepest_node.x_loc:
+    if debug:
+      print("----ITER", iters, "----")
+      print("on Node", cur_node.x_loc[0])
+    if cur_node.x_loc[0] > deepest_node.x_loc[0]:
       deepest_node = cur_node
 
     # get a terrain array along this time horizon
@@ -275,7 +300,7 @@ def RNNGuidedAstar(x0_apex,
     # for p in pos:
     #   t_array.append(terrain_func(cur_node.x_loc + p))
 
-    prev_steps = path_from_parent(cur_node)
+    prev_steps = path_from_parent2(cur_node)
     planning_apex = x0_apex[0:3]
     t_array = []
     for p in pos:
@@ -286,22 +311,25 @@ def RNNGuidedAstar(x0_apex,
     next_samples = discrete_sampling(distribution, num_samples, min = -3, max = 8)
     for sample in next_samples:
       input = step_controller.calcAngle(sample, cur_apex[2], 0, 0, y = cur_apex[1])
-      apex1, apex2, last_flight = hopper.getNextState2(cur_apex,
+      apex1, apex2, last_flight, count = hopper.getNextState2Count(cur_apex,
                                                       input,
                                                       terrain_func,
                                                       terrain_normal_func,
                                                       friction,
                                                       at_apex = True)
-      
+      total_odes += count 
       if apex1 is not None:
         # calculate the cost at last flight (right before landing)
         cost = cost_fn(last_flight, [], goal, step) + np.random.rand() * 1e-4
-        new_node = GraphNode(last_flight[0], 
+        new_node = GraphNode((last_flight[0], cur_apex[0] + sample), 
                              input, apex2, 
                              step, cost + cur_node.value, 
                              cur_node, [])
-        tup = (new_node.value, new_node)
+        tup = (cost, new_node)
         cur_node.children.append(new_node)
+        if debug:
+          print("Sample step loc:", last_flight[0])
+          print("Sample cost:", cost)
         pq.put(tup)
     if pq.qsize() <= 0:
       break
@@ -309,108 +337,13 @@ def RNNGuidedAstar(x0_apex,
     cur_apex = cur_node.apex
     step = cur_node.step + 1
     iters += 1
-    if cur_node.x_loc > goal[0]:
+    if cur_node.x_loc[0] > goal[0]:
       num_goal_nodes += 1
       goal_node = cur_node
 
   if num_goal_nodes == 0:
-    return path_from_parent(deepest_node)
+    return path_from_parent2(deepest_node), total_odes
 
   # calculate the final path
-  steps = path_from_parent(goal_node)
-  return steps
-
-def footSpaceAStar(x0_apex,
-                   goal,
-                   num_goals,
-                   step_controller,
-                   terrain_func,
-                   friction,
-                   horizon,
-                   spacing,
-                   cost_fn,
-                   get_full_tree = True):
-  # initialize all the shits
-  pq = queue.PriorityQueue()
-  nodes = []
-  goal_nodes = []
-  iters = 0
-  timeout = 3000
-  pos = np.arange(0, 8.0, 0.1)
-  terrain_normal_func = lambda x: np.pi/2
-  Ts = 0.17
-  Tf = 0.60
-  step = 0
-
-  cur_node = GraphNode(x0_apex[0], 0, x0_apex, 0, 0, None, [])
-  root_node = cur_node
-  deepest_node = cur_node
-  cur_apex = x0_apex
-  time_till_ground = 2 * (x0_apex[1] - hopper.constants.L)/(-hopper.constants.g)
-  xstep_pred = x0_apex[0] + x0_apex[2] * time_till_ground
-
-  cur_node.x_loc = xstep_pred
-
-  while len(goal_nodes) < num_goals and iters < timeout:
-    if cur_node.x_loc > deepest_node.x_loc:
-      deepest_node = cur_node
-
-    next_samples = np.arange(cur_node.x_loc - 0.5, cur_node.x_loc + horizon, spacing)
-    next_apexes = []
-    last_flights = []
-    for sample in next_samples:
-      input = step_controller.calcAngle(sample, cur_apex[2], 0, 0)
-      apex1, apex2, last_flight = hopper.getNextState2(cur_apex,
-                                                      input,
-                                                      terrain_func,
-                                                      terrain_normal_func,
-                                                      friction,
-                                                      at_apex = True)
-      
-      if apex1 is not None:
-        next_apexes.append(apex2)
-        last_flights.append(last_flight)
-    for i in range(len(next_apexes)):
-      # calculate the cost at last flight (right before landing)
-      if i == 0:
-        neighbors = [last_flights[min(1, len(next_apexes) - 1)]]   
-      elif i == len(next_apexes) - 1:
-        neighbors = [last_flights[i-1]]
-      else:
-        neighbors = [last_flights[i-1], last_flights[i+1]]
-      cost = cost_fn(last_flights[i], neighbors, goal, step) + np.random.rand() * 1e-4
-      new_node = GraphNode(last_flights[i][0], 
-                           input, next_apexes[i], 
-                           step, cost + cur_node.value, 
-                           cur_node, [])
-      tup = (new_node.value, new_node)
-      cur_node.children.append(new_node)
-      pq.put(tup)
-    if pq.qsize() <= 0:
-      break
-    cur_node = pq.get()[1]
-    cur_apex = cur_node.apex
-    step = cur_node.step + 1
-    iters += 1
-    if cur_node.x_loc > goal[0]:
-      goal_nodes.append(cur_node) 
-
-  if iters >= timeout:
-    print("timeout! deepest node = ", deepest_node.x_loc)
-  print("Foot Space A* found", len(goal_nodes), "goal nodes")
-  if get_full_tree:
-    all_paths, all_angles = inOrderHelper(root_node, goal[0])
-    return all_paths, all_angles
-  else:
-    for cur_node in goal_nodes:
-      traj = [cur_node.x_loc]
-      angles = [cur_node.prev_angle]
-      while cur_node.parent is not None:
-        cur_node = cur_node.parent
-        traj.append(cur_node.x_loc)
-        angles.append(cur_node.prev_angle)
-      traj = list(reversed(traj))
-      angles = list(reversed(angles))
-      sequences.append(traj)
-      inputs.append(angles)
-    return sequences, inputs
+  steps = path_from_parent2(goal_node)
+  return steps, total_odes
