@@ -34,7 +34,6 @@ def default_terrain_func(x):
 
 '''
 Makes sure we are within friction cone bounds and spring hasn't bottomed-out.
-- terrain normals give the 
 '''
 def checkStanceFailure(x_stance, foot_pos,
                        terrain_func, terrain_normal_func=None,
@@ -169,7 +168,6 @@ def stanceDynamics(t, x):
 
 # converts final flight state into initial stance state upon touchdown
 # Also need to save the foot position, since it is assumed stationary during stance phase
-# THIS IS ASSUMED THAT THE TERRAIN IS 0...NEED TO PASS IN TERRAIN FUNC?
 def flightToStance(x):
     Lb_init = constants.L
     # x_diff = x[0] - foot_pos[0]
@@ -286,14 +284,195 @@ def simulateOneStancePhase(x_flight, tstep = 0.01, terrain_func = default_terrai
     return code, stance_states, integrator.t
 
 
+
+
 ### SIMULATION UTILITIES ###
 sim_codes = {"SUCCESS":0, "SPRING_BOTTOM_OUT":-1, "FRICTION_CONE":-2, "A*_NO_PATH":-3, "BODY_CRASH":-4, "FOOT_CRASH":-5, "TOO_MANY_STEPS":-6}
 sim_codes_rev = dict(map(reversed, sim_codes.items()))
 constants = Constants()
 
+# Wrapper class for low level functions 
+class Hopper:
+    def __init__(self, constants):
+        self.constants = constants
+    
+    def flightToStance(self, x):
+        Lb_init = self.constants.L
+        # x_diff = x[0] - foot_pos[0]
+        # y_diff = x[1] - foot_pos[1]
+        # Lb_init = np.sqrt(x_diff**2 + y_diff**2)
+        a_init = x[5]  
+        a_d_init = (-np.sin(a_init) * x[2] + np.cos(a_init) * x[3])/Lb_init
+        Lb_d_init = np.cos(a_init) * x[2] + np.sin(a_init) * x[3]
+        stance_vec = [a_init, a_d_init, Lb_init, Lb_d_init]
+        # print("converted stance energy", stancePhaseEnergy(stance_vec))
+        return stance_vec
 
-def getNextState(x_flight, u, terrain_func):
-    success, flight_states, _ = simulateOneFlightPhaseODE(None, 
+
+    # converts final stance state to initial flight state on takeoff
+    def stanceToFlight(self, x_stance, foot_pos):
+        # print("input stance energy", stancePhaseEnergy(x_stance))
+        xb = foot_pos[0] + np.cos(x_stance[0]) * x_stance[2]
+        yb = foot_pos[1] + np.sin(x_stance[0]) * x_stance[2]
+        xb_d = np.cos(x_stance[0]) * x_stance[3] - np.sin(x_stance[0]) * x_stance[1] * x_stance[2]
+        yb_d = np.sin(x_stance[0]) * x_stance[3] + np.cos(x_stance[0]) * x_stance[1] * x_stance[2]
+        flight_vec = [xb, yb, xb_d, yb_d, 0, x_stance[0]]
+        # print("converted flight energy:", flightPhaseEnergy(flight_vec))
+        return flight_vec
+
+    '''
+    Makes sure we are within friction cone bounds and spring hasn't bottomed-out.
+    '''
+    def checkStanceFailure(self, x_stance, foot_pos,
+                           terrain_func, terrain_normal_func=None,
+                           u = None, debug = True):
+      if x_stance[2] < self.constants.Lf - 0.05:
+        if debug:
+          print("Spring bottom-ed out:", x_stance[2])
+        return sim_codes["SPRING_BOTTOM_OUT"]
+      
+      if terrain_normal_func is not None and u is not None:
+        normal = terrain_normal_func(foot_pos[0])
+        forward_limit = normal - np.arctan(u)
+        rear_limit = normal + np.arctan(u)
+
+        if x_stance[0] < forward_limit:
+          if debug:
+            print("Forward Friction cone violation!: leg_angle", x_stance[0], "limit = ", forward_limit)
+          return sim_codes["FRICTION_CONE"]
+        if x_stance[0] > rear_limit:
+          if debug:
+            print("Rear Friction cone violation!: leg_angle", x_stance[0], "limit = ", rear_limit)
+          return sim_codes["FRICTION_CONE"]
+
+      body_pos = self.getBodyXYInStance(x_stance, foot_pos)
+      
+      # This indicates a collision with a wall
+      if terrain_func(body_pos[0]) > body_pos[1]:
+        if debug:
+          print("Collision with wall in stance! Body y", body_pos[1], " < terrain y", terrain_func(body_pos[0]))
+        return sim_codes["BODY_CRASH"]
+      return sim_codes["SUCCESS"]
+
+
+    '''
+    Checks if the body or foot collides with any terrain features
+    - terrain_func is a function that maps x coord to y coord
+    '''
+    def checkFlightCollision(self, x_flight, terrain_func, debug = False):
+      body_x = x_flight[0]
+      body_y = x_flight[1]
+      foot_pos = self.getFootXYInFlight(x_flight)
+      if terrain_func(body_x) > body_y:
+        if debug:
+          print("body collision in flight phase!")
+          print("For body y = ", body_y, "terrain y", terrain_func(body_x))
+        return sim_codes["BODY_CRASH"]
+      elif terrain_func(foot_pos[0]) > foot_pos[1] + 0.05:
+        if debug:
+          print("foot collision in flight phase! x = ", foot_pos[0], "y = ", foot_pos[1])
+        return sim_codes["FOOT_CRASH"]
+      return sim_codes["SUCCESS"]
+
+
+    def getFootXYInFlight(self, x_flight):
+        a = x_flight[5]
+        body_x = x_flight[0]
+        body_y = x_flight[1]
+        foot_x = body_x - np.cos(a) * self.constants.L
+        foot_y = body_y - np.sin(a) * self.constants.L
+        return [foot_x, foot_y]
+
+
+    def getBodyXYInStance(self, x_stance, foot_pos):
+        a = x_stance[0]
+        Lb = x_stance[2]
+
+        x_b = foot_pos[0] + np.cos(a) * Lb
+        y_b = foot_pos[1] + np.sin(a) * Lb
+        return [x_b, y_b]
+
+    def simulateOneStancePhase(self, x_flight, tstep = 0.01, terrain_func = default_terrain_func, 
+                               print_fails = True, terrain_normal_func = None, friction = None):
+        x0_stance = self.flightToStance(x_flight)
+        foot_pos = self.getFootXYInFlight(x_flight)
+        integrator = ode(stanceDynamics)
+        integrator.set_initial_value(x0_stance, 0)
+        code = sim_codes["SUCCESS"]
+        stance_states = [x0_stance]
+        success = True
+        while integrator.successful():
+            integrator.integrate(integrator.t + tstep)
+            # print("stance energy:", getStanceEnergy(integrator.y))
+            stance_states.append(integrator.y)
+            if integrator.y[2] >= self.constants.L:
+              break
+            code = self.checkStanceFailure(integrator.y,
+                                      foot_pos,
+                                      terrain_func,
+                                      debug = print_fails,
+                                      terrain_normal_func = terrain_normal_func,
+                                      u = friction)
+            if code < 0:
+                break
+        return code, stance_states, integrator.t
+
+    def simulateOneFlightPhaseODE(self, 
+                                  x_stance, 
+                                  foot_pos = None, 
+                                  x_init = None, 
+                                  debug = False, 
+                                  u = np.pi/2, 
+                                  tstep = 0.01, 
+                                  terrain_func = default_terrain_func,
+                                  till_apex = False,
+                                  print_fails = True,
+                                  hit_apex = False):
+        if debug:
+            x0_flight = x_init
+        else:
+            x0_flight = self.stanceToFlight(x_stance, foot_pos)
+
+        foot_angle_next = u
+
+        flight_states = [x0_flight]
+        integrator = ode(flightDynamics)
+        integrator.set_initial_value(x0_flight, 0)
+        ret_val = sim_codes["SUCCESS"]
+        cond = False
+        success = True
+        while integrator.successful():
+            x = integrator.integrate(integrator.t + tstep)
+            state = integrator.y
+            # ke = 0.5 * constants.m * (state[2]**2 + state[3]**2)
+            # pe = constants.m * np.abs(constants.g) * state[1]
+            # print("flight energy:", ke + pe)
+            if integrator.y[3] <= 0 and flight_states[len(flight_states)-1][3] >= 0:
+                hit_apex = True
+                if till_apex:
+                  flight_states.append(integrator.y)
+                  return sim_codes["SUCCESS"], flight_states, integrator.t
+
+            cur_state = integrator.y
+            if hit_apex:
+                cur_state[5] = foot_angle_next
+                cond = True
+
+            flight_states.append(cur_state)
+            foot_pos = self.getFootXYInFlight(cur_state)
+            if cond and foot_pos[1] <= terrain_func(foot_pos[0]):
+                if terrain_func(foot_pos[0] + 0.02) == terrain_func(foot_pos[0] - 0.02):
+                    break
+            if np.abs(cur_state[1] - x0_flight[1]) > 0.05:
+                ret_val = self.checkFlightCollision(cur_state, terrain_func, debug = print_fails)
+            if ret_val < 0:  
+                break
+
+        return ret_val, flight_states, integrator.t
+
+# Higher level wrapper functions
+def getNextState(hopper, x_flight, u, terrain_func):
+    success, flight_states, _ = hopper.simulateOneFlightPhaseODE(None, 
                                                           x_init = x_flight,
                                                           debug = True,
                                                           u = u,
@@ -302,16 +481,16 @@ def getNextState(x_flight, u, terrain_func):
     if not success:
         return False, -1, -1, []
     last_flight_state = flight_states[len(flight_states)-1]
-    foot_pos = getFootXYInFlight(last_flight_state)
-    success, stance_states, _ = simulateOneStancePhase(last_flight_state, terrain_func = terrain_func,
-                                                       print_fails = False)
+    foot_pos = hopper.getFootXYInFlight(last_flight_state)
+    success, stance_states, _ = hopper.simulateOneStancePhase(last_flight_state, terrain_func = terrain_func,
+                                                              print_fails = False)
     if not success:
         return False, -1, -1, []
     last_stance_state = stance_states[len(stance_states) - 1]
-    success, flight_states, _ = simulateOneFlightPhaseODE(last_stance_state, 
-                                                          foot_pos, 
-                                                          terrain_func = terrain_func,
-                                                          print_fails = False)
+    success, flight_states, _ = hopper.simulateOneFlightPhaseODE(last_stance_state, 
+                                                                 foot_pos, 
+                                                                 terrain_func = terrain_func,
+                                                                 print_fails = False)
     if not success:
         return False, -1, -1, []
     apex_state = None
@@ -322,10 +501,10 @@ def getNextState(x_flight, u, terrain_func):
     return True, foot_pos[0], flight_states[len(flight_states)-1], apex_state
 
 
-def getNextState2Count(x_flight, input_angle, terrain_func, terrain_normal_func = None, friction = None,
+def getNextState2Count(hopper, x_flight, input_angle, terrain_func, terrain_normal_func = None, friction = None,
                   at_apex = False):
   count = 0
-  code, flight_states, _ = simulateOneFlightPhaseODE(None, 
+  code, flight_states, _ = hopper.simulateOneFlightPhaseODE(None, 
                                                         x_init = x_flight,
                                                         debug = True,
                                                         u= input_angle,
@@ -346,9 +525,9 @@ def getNextState2Count(x_flight, input_angle, terrain_func, terrain_normal_func 
             break
   
   last_flight_state = flight_states[len(flight_states)-1]
-  foot_pos = getFootXYInFlight(last_flight_state)
+  foot_pos = hopper.getFootXYInFlight(last_flight_state)
   first_step_loc = foot_pos[0]
-  code, stance_states, _ = simulateOneStancePhase(last_flight_state,
+  code, stance_states, _ = hopper.simulateOneStancePhase(last_flight_state,
                                                       terrain_func = terrain_func,
                                                       print_fails = False,
                                                       terrain_normal_func = terrain_normal_func,
@@ -357,10 +536,10 @@ def getNextState2Count(x_flight, input_angle, terrain_func, terrain_normal_func 
   if code < 0:
     return None, None, None, count
   last_stance_state = stance_states[len(stance_states) - 1]
-  x_flight = stanceToFlight(last_stance_state, foot_pos)
+  x_flight = hopper.stanceToFlight(last_stance_state, foot_pos)
   
   # simulate one more flight phase to check for collision (for robustness)
-  code, flight_states, _ = simulateOneFlightPhaseODE(None, 
+  code, flight_states, _ = hopper.simulateOneFlightPhaseODE(None, 
                                                         x_init = x_flight,
                                                         debug = True,
                                                         u= np.pi/2,
@@ -377,9 +556,9 @@ def getNextState2Count(x_flight, input_angle, terrain_func, terrain_normal_func 
       break
   return first_apex, second_apex, flight_states[-1], count
 
-def getNextState2(x_flight, input_angle, terrain_func, terrain_normal_func = None, friction = None,
+def getNextState2(hopper, x_flight, input_angle, terrain_func, terrain_normal_func = None, friction = None,
                   at_apex = False):
-  code, flight_states, _ = simulateOneFlightPhaseODE(None, 
+  code, flight_states, _ = hopper.simulateOneFlightPhaseODE(None, 
                                                         x_init = x_flight,
                                                         debug = True,
                                                         u= input_angle,
@@ -399,20 +578,20 @@ def getNextState2(x_flight, input_angle, terrain_func, terrain_normal_func = Non
             break
   
   last_flight_state = flight_states[len(flight_states)-1]
-  foot_pos = getFootXYInFlight(last_flight_state)
+  foot_pos = hopper.getFootXYInFlight(last_flight_state)
   first_step_loc = foot_pos[0]
-  code, stance_states, _ = simulateOneStancePhase(last_flight_state,
-                                                      terrain_func = terrain_func,
-                                                      print_fails = False,
-                                                      terrain_normal_func = terrain_normal_func,
-                                                      friction = friction)
+  code, stance_states, _ = hopper.simulateOneStancePhase(last_flight_state,
+                                                         terrain_func = terrain_func,
+                                                         print_fails = False,
+                                                         terrain_normal_func = terrain_normal_func,
+                                                         friction = friction)
   if code < 0:
     return None, None, None
   last_stance_state = stance_states[len(stance_states) - 1]
-  x_flight = stanceToFlight(last_stance_state, foot_pos)
+  x_flight = hopper.stanceToFlight(last_stance_state, foot_pos)
   
   # simulate one more flight phase to check for collision (for robustness)
-  code, flight_states, _ = simulateOneFlightPhaseODE(None, 
+  code, flight_states, _ = hopper.simulateOneFlightPhaseODE(None, 
                                                         x_init = x_flight,
                                                         debug = True,
                                                         u= np.pi/2,
@@ -428,8 +607,8 @@ def getNextState2(x_flight, input_angle, terrain_func, terrain_normal_func = Non
       break
   return first_apex, second_apex, flight_states[-1]
 
-def getNextState3(x_flight, input_angle, terrain_func, terrain_normal_func = None, friction = None):
-  code, flight_states, _ = simulateOneFlightPhaseODE(None, 
+def getNextState3(hopper, x_flight, input_angle, terrain_func, terrain_normal_func = None, friction = None):
+  code, flight_states, _ = hopper.simulateOneFlightPhaseODE(None, 
                                                       x_init = x_flight,
                                                       debug = True,
                                                       u= input_angle,
@@ -445,9 +624,9 @@ def getNextState3(x_flight, input_angle, terrain_func, terrain_normal_func = Non
           break
   
   last_flight_state = flight_states[len(flight_states)-1]
-  foot_pos = getFootXYInFlight(last_flight_state)
+  foot_pos = hopper.getFootXYInFlight(last_flight_state)
   first_step_loc = foot_pos[0]
-  code, stance_states, _ = simulateOneStancePhase(last_flight_state,
+  code, stance_states, _ = hopper.simulateOneStancePhase(last_flight_state,
                                                   terrain_func = terrain_func,
                                                   print_fails = False,
                                                   terrain_normal_func = terrain_normal_func,
@@ -455,10 +634,10 @@ def getNextState3(x_flight, input_angle, terrain_func, terrain_normal_func = Non
   if code < 0:
     return None, None
   last_stance_state = stance_states[len(stance_states) - 1]
-  x_flight = stanceToFlight(last_stance_state, foot_pos)
+  x_flight = hopper.stanceToFlight(last_stance_state, foot_pos)
   
   # simulate one more flight phase to check for collision (for robustness)
-  code, flight_states, _ = simulateOneFlightPhaseODE(None, 
+  code, flight_states, _ = hopper.simulateOneFlightPhaseODE(None, 
                                                     x_init = x_flight,
                                                     debug = True,
                                                     u= np.pi/2,
@@ -472,7 +651,7 @@ def getNextState3(x_flight, input_angle, terrain_func, terrain_normal_func = Non
   return first_step_loc, second_step
 
 
-def simulateNSteps(n, initial_apex, input_angles, terrain_func, return_apexes = False,
+def simulateNSteps(robot, n, initial_apex, input_angles, terrain_func, return_apexes = False,
                    terrain_normal_func = None, friction = None, print_fails = False):
   steps = 0
   step_locs = []
@@ -481,7 +660,7 @@ def simulateNSteps(n, initial_apex, input_angles, terrain_func, return_apexes = 
   x_flight = initial_apex
   apexes = []
   while steps < n:
-    code, flight_states, _ = simulateOneFlightPhaseODE(None, 
+    code, flight_states, _ = robot.simulateOneFlightPhaseODE(None, 
                                                       x_init = x_flight,
                                                       debug = True,
                                                       u= input_angles[steps],
@@ -497,9 +676,9 @@ def simulateNSteps(n, initial_apex, input_angles, terrain_func, return_apexes = 
             break
     
     last_flight_state = flight_states[len(flight_states)-1]
-    foot_pos = getFootXYInFlight(last_flight_state)
+    foot_pos = hopper.sgetFootXYInFlight(last_flight_state)
     step_locs.append(foot_pos[0])
-    code, stance_states, _ = simulateOneStancePhase(last_flight_state,
+    code, stance_states, _ = robot.simulateOneStancePhase(last_flight_state,
                                                        terrain_func = terrain_func,
                                                        print_fails = print_fails,
                                                        terrain_normal_func = terrain_normal_func,
@@ -508,10 +687,10 @@ def simulateNSteps(n, initial_apex, input_angles, terrain_func, return_apexes = 
     if code < 0:
       return None, None
     last_stance_state = stance_states[len(stance_states) - 1]
-    x_flight = stanceToFlight(last_stance_state, foot_pos)
+    x_flight = hopper.sstanceToFlight(last_stance_state, foot_pos)
   
   # simulate one more flight phase to check for collision (for robustness)
-  code, flight_states, _ = simulateOneFlightPhaseODE(None, 
+  code, flight_states, _ = robot.simulateOneFlightPhaseODE(None, 
                                                         x_init = x_flight,
                                                         debug = True,
                                                         u= np.pi/2,

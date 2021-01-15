@@ -21,7 +21,7 @@ def processSeq(seq, buf, mov_amount, terrain_func):
 # Idea: randomly sampling for long sequences takes a long ass time. 
 # Instead compose a bunch of shorter sequences together to form a longer sequence.
 # Also could just use A*, since this could get stuck in local minima. 
-def generateNFeasibleSteps(n,
+def generateNFeasibleSteps(robot, n,
                            initial_apex,
                            terrain_func,
                            terrain_normal_func,
@@ -37,7 +37,7 @@ def generateNFeasibleSteps(n,
 
   while len(steps_list) < n and tries < max_tries:
     angles = np.random.rand(2) * (max_angle - min_angle) + min_angle
-    steps, apexes = hopper.simulateNSteps(2, x0, angles, terrain_func, return_apexes = True, 
+    steps, apexes = hopper.simulateNSteps(robot, 2, x0, angles, terrain_func, return_apexes = True, 
                                    terrain_normal_func = terrain_normal_func, friction = friction)
     if steps is not None:
       if len(steps_list) == 0:
@@ -56,7 +56,8 @@ def generateNFeasibleSteps(n,
     return None, None
 
 
-def generateRandomSequences(num_terrains, 
+def generateRandomSequences(robot,
+                            num_terrains, 
                             num_apexes,
                             num_astar_sequences,
                             max_backup_steps,
@@ -119,18 +120,19 @@ def generateRandomSequences(num_terrains,
       num_tries = 0
       while success_count < num_astar_sequences and num_tries < max_tries:
                                                          
-        step_sequences, angle_sequences = aStarHelper(initial_apex,
-                                                     [10, 0],
-                                                     num_astar_sequences,
-                                                     terrain_functions[i],
-                                                     lambda x: np.pi/2,
-                                                     friction,
-                                                     num_angle_samples = 18,
-                                                     timeout = 500,
-                                                     max_speed = 3,
-                                                     get_full_tree = full_tree,
-                                                     neutral_angle = False,
-                                                     cost_fn = cost_fn)
+        step_sequences, angle_sequences = aStarHelper(robot,
+                                                      initial_apex,
+                                                      [10, 0],
+                                                      num_astar_sequences,
+                                                      terrain_functions[i],
+                                                      lambda x: np.pi/2,
+                                                      friction,
+                                                      num_angle_samples = 18,
+                                                      timeout = 500,
+                                                      max_speed = 3,
+                                                      get_full_tree = full_tree,
+                                                      neutral_angle = False,
+                                                      cost_fn = cost_fn)
         for l, ss in enumerate(step_sequences):
           cond = len(ss) > max_backup_steps and ss[-1] >= ss[0]
           for s in range(1, len(ss)):
@@ -142,18 +144,19 @@ def generateRandomSequences(num_terrains,
             initial_states.append(initial_condition)
         if success_count < num_astar_sequences:
           print("A* backup: trying with more samples..")
-          step_sequences, angle_sequences = aStarHelper(initial_apex,
-                                              [10, 0],
-                                              num_astar_sequences,
-                                              terrain_functions[i],
-                                              lambda x: np.pi/2,
-                                              friction,
-                                              num_angle_samples = 30,
-                                              timeout = 500,
-                                              max_speed = 4,
-                                              get_full_tree = full_tree,
-                                              neutral_angle = False,
-                                              cost_fn = cost_fn)
+          step_sequences, angle_sequences = aStarHelper(robot,
+                                                      initial_apex,
+                                                      [10, 0],
+                                                      num_astar_sequences,
+                                                      terrain_functions[i],
+                                                      lambda x: np.pi/2,
+                                                      friction,
+                                                      num_angle_samples = 30,
+                                                      timeout = 500,
+                                                      max_speed = 4,
+                                                      get_full_tree = full_tree,
+                                                      neutral_angle = False,
+                                                      cost_fn = cost_fn)
           for l, ss in enumerate(step_sequences):
             cond = len(ss) > max_backup_steps and ss[-1] >= ss[0]
             for s in range(1, len(ss)):

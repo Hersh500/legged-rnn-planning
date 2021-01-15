@@ -11,6 +11,7 @@ class AStarPlanner:
         self.max_speed = max_speed
         self.num_samples = num_samples
         self.fallback_samples = fallback_samples
+        self.robot = robot
 
         def costFn(x_flight, neighbors, goal, p):
             x_pos = x_flight[0]
@@ -19,12 +20,13 @@ class AStarPlanner:
 
         self.cost_fn = costFn
 
-    def predict(self, initial_apex, terrain_func, friction, goal, use_fallback, timeout = 1000):
+    def predict(self, robot, initial_apex, terrain_func, friction, goal, use_fallback, timeout = 1000):
         if use_fallback:
             num_samples = self.fallback_samples
         else:
             num_samples = self.num_samples
-        step_sequences, angle_sequences, count = aStarHelper(initial_apex,
+        step_sequences, angle_sequences, count = aStarHelper(robot,
+                                                      initial_apex,
                                                       goal, 1,
                                                       terrain_func,
                                                       lambda x: np.pi/2,
