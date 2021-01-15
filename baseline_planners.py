@@ -7,7 +7,7 @@ from astar_tree_search import aStarHelper
     Uses Astarhelper in the same planning framework
 '''
 class AStarPlanner:
-    def __init__(self, num_samples, fallback_samples, max_speed, cost_matrix):
+    def __init__(self, robot, num_samples, fallback_samples, max_speed, cost_matrix):
         self.max_speed = max_speed
         self.num_samples = num_samples
         self.fallback_samples = fallback_samples
@@ -20,12 +20,12 @@ class AStarPlanner:
 
         self.cost_fn = costFn
 
-    def predict(self, robot, initial_apex, terrain_func, friction, goal, use_fallback, timeout = 1000):
+    def predict(self, initial_apex, terrain_func, friction, goal, use_fallback, timeout = 1000):
         if use_fallback:
             num_samples = self.fallback_samples
         else:
             num_samples = self.num_samples
-        step_sequences, angle_sequences, count = aStarHelper(robot,
+        step_sequences, angle_sequences, count = aStarHelper(self.robot,
                                                       initial_apex,
                                                       goal, 1,
                                                       terrain_func,
