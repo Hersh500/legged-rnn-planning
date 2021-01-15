@@ -34,7 +34,6 @@ def default_terrain_func(x):
 
 '''
 Makes sure we are within friction cone bounds and spring hasn't bottomed-out.
-'''
 def checkStanceFailure(x_stance, foot_pos,
                        terrain_func, terrain_normal_func=None,
                        u=None, debug = True):
@@ -65,12 +64,11 @@ def checkStanceFailure(x_stance, foot_pos,
       print("Collision with wall in stance! Body y", body_pos[1], " < terrain y", terrain_func(body_pos[0]))
     return sim_codes["BODY_CRASH"]
   return sim_codes["SUCCESS"]
-
+'''
 
 '''
 Checks if the body or foot collides with any terrain features
 - terrain_func is a function that maps x coord to y coord
-'''
 def checkFlightCollision(x_flight, terrain_func, debug = False):
   body_x = x_flight[0]
   body_y = x_flight[1]
@@ -85,8 +83,9 @@ def checkFlightCollision(x_flight, terrain_func, debug = False):
       print("foot collision in flight phase! x = ", foot_pos[0], "y = ", foot_pos[1])
     return sim_codes["FOOT_CRASH"]
   return sim_codes["SUCCESS"]
+'''
 
-
+'''
 def getFootXYInFlight(x_flight):
     a = x_flight[5]
     body_x = x_flight[0]
@@ -103,7 +102,7 @@ def getBodyXYInStance(x_stance, foot_pos):
     x_b = foot_pos[0] + np.cos(a) * Lb
     y_b = foot_pos[1] + np.sin(a) * Lb
     return [x_b, y_b]
-
+'''
 
 '''
 flight state vector:
@@ -124,12 +123,13 @@ def flightStep(x, u, tstep):
     x_next = [com_x_next, com_y_next, x_vel_next, y_vel_next, w_next, foot_angle_next]
     return x_next
 
-
+'''
 def flightDynamics(t, x):
     derivs = [x[2], x[3], 0, 0, 0, 0]
     derivs[2] = 0
     derivs[3] = constants.g
     return derivs
+'''
 
 # calculates leg angle as a function of the current flight state and desired CoM velocity
 def legAnglePControl(x_flight, x_vel_des, k, Kp, tst = 0.18):
@@ -148,7 +148,6 @@ stance state vector:
     a_d: the angular velocity of the leg
     Lb: the length of the leg
     Lb_d: the derivative of the length of the leg
-'''
 # Currently assuming flat ground. Needs to be reworked for mixed terrain.
 # Returns actual second derivatives, not the state at the second timestep.
 # This is because a closed form solution for the dynamics doesn't exist.
@@ -164,8 +163,8 @@ def stanceDynamics(t, x):
     derivs[1] = a_dd
     derivs[3] = Lb_dd
     return derivs
-
-
+'''
+'''
 # converts final flight state into initial stance state upon touchdown
 # Also need to save the foot position, since it is assumed stationary during stance phase
 def flightToStance(x):
@@ -244,7 +243,7 @@ def simulateOneFlightPhaseODE(x_stance,
             break
 
     return ret_val, flight_states, integrator.t
-
+'''
 
 def getStanceEnergy(x_stance):
   stance_ke = (0.5 * x_stance[1]**2 * x_stance[2]**2 * constants.m + 
@@ -253,7 +252,7 @@ def getStanceEnergy(x_stance):
                np.abs(constants.g) * np.sin(x_stance[0]) * (x_stance[2] * constants.m))
   return stance_ke + stance_pe
       
-  
+'''  
 def simulateOneStancePhase(x_flight, tstep = 0.01, terrain_func = default_terrain_func, 
                            print_fails = True, terrain_normal_func = None, friction = None):
     x0_stance = flightToStance(x_flight)
@@ -282,6 +281,7 @@ def simulateOneStancePhase(x_flight, tstep = 0.01, terrain_func = default_terrai
         if code < 0:
             break
     return code, stance_states, integrator.t
+'''
 
 
 
