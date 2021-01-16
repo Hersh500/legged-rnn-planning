@@ -50,7 +50,7 @@ def stateCost_neighbors(x_flight, neighbors, goal, p):
     return np.abs(x_pos - goal[0]) +  3 * np.abs(x_vel) + spread
 
 
-def sampleLegAngles(x_apex, goal, step, terrain_func, terrain_normal_func, friction,
+def sampleLegAngles(robot, x_apex, goal, step, terrain_func, terrain_normal_func, friction,
                     num_samples, cost_fn, cov_factor = 4, neutral_angle_normal = True):
   # this is the limit of how far forward the leg can be placed in front of body
   # based on the friction cone
@@ -80,7 +80,8 @@ def sampleLegAngles(x_apex, goal, step, terrain_func, terrain_normal_func, frict
     # pos = np.random.rand(num_samples) * (max_limit - min_limit) + min_limit
     pos = sorted(pos)
   for i in range(len(pos)):
-    apex1, apex2, last_flight, count = hopper.getNextState2Count(x_apex,
+    apex1, apex2, last_flight, count = hopper.getNextState2Count(robot, 
+                                                    x_apex,
                                                     pos[i],
                                                     terrain_func,
                                                     terrain_normal_func,
@@ -134,13 +135,13 @@ def inOrderHelper(root_node, goal):
 Performs an A* search from the initial node to the goal node.
 Returns a list of sequences that have reached the goal state.
 '''
-def aStarHelper(x0_apex, goal, num_goal_nodes,
+def aStarHelper(robot, x0_apex, goal, num_goal_nodes,
                 terrain_func, terrain_normal_func, friction,
                 num_angle_samples, timeout = 1000, get_full_tree = False,
                 cov_factor = 4, neutral_angle = True, max_speed = 2,
                 cost_fn = stateCost, count_odes = False):
 
-  time_till_ground = 2 * (x0_apex[1] - hopper.constants.L)/(-hopper.constants.g)
+  time_till_ground = 2 * (x0_apex[1] - robot.constants.L)/(-robot.constants.g)
   xstep_pred = x0_apex[0] + x0_apex[2] * time_till_ground
 
   cur_node = GraphNode(x0_apex[0], 0, x0_apex, 0, 0, None, [])
@@ -254,7 +255,8 @@ def discrete_sampling(distribution, num_samples,
 
 # Currently using controller inputs instead of true location inputs
 # TODO: return/print some debugging information, or something like that.
-def RNNGuidedAstar(x0_apex,
+def RNNGuidedAstar(robot, 
+                   x0_apex,
                    goal,
                    rnn_planner,
                    step_controller,
@@ -279,7 +281,7 @@ def RNNGuidedAstar(x0_apex,
   cur_node = GraphNode(x0_apex[0], 0, x0_apex, 0, 0, None, [])
   deepest_node = cur_node
   cur_apex = x0_apex
-  time_till_ground = 2 * (x0_apex[1] - hopper.constants.L)/(-hopper.constants.g)
+  time_till_ground = 2 * (x0_apex[1] - robot.constants.L)/(-robot.constants.g)
   xstep_pred = x0_apex[0] + x0_apex[2] * time_till_ground
 
   cur_node.x_loc = (xstep_pred, xstep_pred)
@@ -311,7 +313,8 @@ def RNNGuidedAstar(x0_apex,
     next_samples = discrete_sampling(distribution, num_samples, min = -3, max = 8)
     for sample in next_samples:
       input = step_controller.calcAngle(sample, cur_apex[2], 0, 0, y = cur_apex[1])
-      apex1, apex2, last_flight, count = hopper.getNextState2Count(cur_apex,
+      apex1, apex2, last_flight, count = hopper.getNextState2Count(robot,
+                                                      cur_apex,
                                                       input,
                                                       terrain_func,
                                                       terrain_normal_func,

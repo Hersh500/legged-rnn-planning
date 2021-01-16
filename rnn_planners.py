@@ -8,11 +8,12 @@ import astar_tree_search
     Uses the RNN planner to guide the astar search
 '''
 class RNNAStarPlanner:
-  def __init__(self, rnn_planner, step_controller, num_samples, fallback_samples, cost_matrix):
+  def __init__(self, robot, rnn_planner, step_controller, num_samples, fallback_samples, cost_matrix):
     self.num_samples = num_samples
     self.fallback_samples = fallback_samples
     self.rnn_planner = rnn_planner
     self.step_controller = step_controller
+    self.robot = robot
     def costFn(x_flight, neighbors, goal, p):
       x_pos = x_flight[0]
       x_vel = x_flight[2]
@@ -29,7 +30,8 @@ class RNNAStarPlanner:
         num_samples = self.fallback_samples
     else:
         num_samples = self.num_samples
-    step_sequence, count = astar_tree_search.RNNGuidedAstar(initial_apex,
+    step_sequence, count = astar_tree_search.RNNGuidedAstar(self.robot,
+                                                     initial_apex,
                                                      goal,
                                                      self.rnn_planner,
                                                      self.step_controller,
