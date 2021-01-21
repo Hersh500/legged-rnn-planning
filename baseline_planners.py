@@ -16,11 +16,15 @@ class AStarPlanner:
         def costFn(x_flight, neighbors, goal, p):
             x_pos = x_flight[0]
             x_vel = x_flight[2]
-            return cost_matrix[0] * np.abs(x_pos - goal[0]) + cost_matrix[1] * np.abs(x_vel - goal[1])
+            spread = 0
+            for n in range(len(neighbors)):
+                spread += np.abs(neighbors[n][0] - x_pos)/len(neighbors)
+
+            return cost_matrix[0] * np.abs(x_pos - goal[0]) + cost_matrix[1] * np.abs(x_vel - goal[1]) + cost_matrix[2] * spread
 
         self.cost_fn = costFn
 
-    def predict(self, initial_apex, terrain_func, friction, goal, use_fallback, timeout = 1000):
+    def predict(self, initial_apex, terrain_func, friction, goal, use_fallback, timeout = 1000, debug = False):
         if use_fallback:
             num_samples = self.fallback_samples
         else:

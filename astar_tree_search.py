@@ -106,7 +106,7 @@ def sampleLegAngles(robot, x_apex, goal, step, terrain_func, terrain_normal_func
     else:
       neighbors = [last_flights[i-1]]
     # cost = stateCost_neighbors(last_flights[i], neighbors, goal, step + 1)
-    cost = cost_fn(last_flights[i], neighbors, goal, step + 1)
+    cost = cost_fn(last_flights[i], neighbors, goal, step + 1) + np.random.rand() * 1e-4  # add small random quantity to prevent errors due to ties
     costs.append(cost)
 
   return angles, costs, apexes, locs, total_count
@@ -166,7 +166,7 @@ def aStarHelper(robot, x0_apex, goal, num_goal_nodes,
       cur_apex = cur_node.apex
       step = cur_node.step + 1
     else:
-      angles, costs, apexes, locs, count = sampleLegAngles(cur_apex, goal, step, terrain_func, 
+      angles, costs, apexes, locs, count = sampleLegAngles(robot, cur_apex, goal, step, terrain_func, 
                                                     terrain_normal_func, friction, num_angle_samples,
                                                     cov_factor = cov_factor, neutral_angle_normal = neutral_angle,
                                                     cost_fn = cost_fn)
@@ -191,8 +191,8 @@ def aStarHelper(robot, x0_apex, goal, num_goal_nodes,
   # now that the while loop has terminated, we can reconstruct the trajectory
   if len(goal_nodes) == 0:
     goal_nodes.append(deepest_node)
-  else:
-    print("A* found", len(goal_nodes), "goal nodes!")
+  # else:
+    # print("A* found", len(goal_nodes), "goal nodes!")
 
   sequences = []
   inputs = []

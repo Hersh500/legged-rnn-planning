@@ -143,7 +143,7 @@ def generateRandomSequences(robot,
             sequences.append(processSeq(ss, 0.2, 0.2, terrain_functions[i]))
             initial_states.append(initial_condition)
         if success_count < num_astar_sequences:
-          print("A* backup: trying with more samples..")
+          # print("A* backup: trying with more samples..")
           step_sequences, angle_sequences = aStarHelper(robot,
                                                       initial_apex,
                                                       [10, 0],
@@ -188,7 +188,7 @@ def generateRandomSequences(robot,
               initial_states.append(initial_condition)
           num_tries += 1
         '''
-        print("added", success_count, "sequences")
+        # print("added", success_count, "sequences")
 
     print("finished terrain", i)
   return initial_states, sequences

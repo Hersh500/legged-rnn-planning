@@ -23,18 +23,53 @@ class FlightState2D:
         self.roll = array[7]
         self.pitch_vel = array[8]
         self.roll_vel = array[9]
+
+    def getDerivatives(self, constants):
+        deriv = [0 for i in range(12)]
+        deriv[0] = self.xdot
+        deriv[1] = self.ydot
+        deriv[2] = self.zdot
+        
+        deriv[3] = 0
+        deriv[4] = 0
+        deriv[5] = constants.g   # TODO: define this, or pass it in in some way
+        
+        deriv[10] = 0
+        deriv[11] = 0
+
+        # body orientation is unused
+        deriv[6] = 0
+        deriv[7] = 0
+        deriv[8] = 0
+        deriv[9] = 0
+        
+        return deriv
+        
     
 
 # Stance state space of 2d hopper; switches to centroidal dynamics
-# [L, Ldot, pitch, pitch_vel, roll, roll_vel]
+# [pitch, pitch_vel, roll, roll_vel, L, Ldot]
 class StanceState2D:
     def __init__(self, array):
-        self.L = array[0]
-        self.Ldot = array[1]
-        self.pitch = array[2]
-        self.pitch_vel = array[3]
-        self.roll = array[4]
-        self.roll_vel = array[5]
+        self.pitch = array[0]
+        self.pitch_vel = array[1]
+        self.roll = array[2]
+        self.roll_vel = array[3]
+        self.L = array[4]
+        self.Ldot = array[5]
+
+    def getDerivatives(self, constants):
+        derivs = [0 for i in range(6)]
+        derivs[0] = self.pitch_vel
+        derivs[1] = (-2 * self.Ldot * self.pitch_vel - np.abs(constants.g) * np.cos(self.pitch))/self.L
+
+        derivs[2] = self.roll_vel
+        derivs[3] = (-2 * self.Ldot * self.roll_vel - np.abs(constants.g) * np.cos(self.roll))/self.L
+
+        derivs[4] = self.Ldot
+        
+        # TODO: how does this work in 2d => vertical component of pitch, roll?
+        # derivs[5] = -constants.k/constants.m * (self.L - constants.Lf - constants.Lk0) - np.abs(constants.g) * np.sin()...
          
 
 
@@ -48,13 +83,14 @@ class Hopper2D:
     def stanceToFlight():
         return
    
-    def flightDynamics():
-        return
+    def flightDynamics(self, x):
+        state = FlightState2D(x)
+        return state.getDerivatives(self.constants)
 
-    def stanceDynamics():
-        return
+    def stanceDynamics(self, x):
+        state = StanceState2D(x)
+        return state.getDerivatives(self.constants)
 
-    # Ballistic
     def simulateOneFlightPhase(self, x_init, foot_pos, u, tstep, terrain_func, till_apex = False, hit_apex = False, init_from_stance = False):
         if init_from_stance:
             x0_flight = self.stanceToFlight(x_init)
