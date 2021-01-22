@@ -163,11 +163,35 @@ class Hopper2D:
         return state.getDerivatives(self.constants)
 
     def checkFlightCollision(self, state, terrain_func):
-        # TODO: implement this.
+        if state.z < terrain_func(state.x, state.y):
+            return sim_codes["BODY_CRASH"]
+        if state.zf < terrain_func(state.xf, state.yf):
+            return sim_codes["FOOT_CRASH"]
         return sim_codes["SUCCESS"]
 
     def checkStanceCollision(self, state, terrain_func, terrain_normal_func, friction):
-        # TODO: implement this.
+        # check friction cone violation
+        base_rad = np.sin(friction) * self.constants.L
+        cone_height = self.constants.L
+        cone_tip = [state.xf, state.yf, state.zf]  # foot is the tip of the cone
+        cone_dir = [0, 0, 1]  # TODO: do not hardcode this, use the terrain_normal_func
+        
+        body_loc = [state.x, state.y, state.z]
+        dist = np.dot(body_loc - cone_tip, cone_dir)
+        rad = (dist/cone_height) * base_rad
+        orth_dist = np.linalg.norm((body_loc - cone_tip) - dist * cone_dir)
+        if orth_dist > rad:
+            return sim_codes["FRICTION_CONE"]
+    
+        # check body crash
+        if state.z < terrain_func(state.x, state.y):
+            return sim_codes["BODY_CRASH"]
+
+        tot_length = state.xhat**2 + state.yhat**2 + state.zhat**2
+        # check spring bottoming out
+        if tot_length < self.constants.Lf**2:
+            return sim_codes["SPRING_BOTTOM_OUT"]
+
         return sim_codes["SUCCESS"]
 
     def stanceDynamics(self, t, x):
