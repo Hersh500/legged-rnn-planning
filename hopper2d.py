@@ -3,7 +3,7 @@ import math
 from scipy.integrate import ode, odeint
 import matplotlib.pyplot as plt
 
-from hopper import sim_codes
+from hopper import sim_codes, sim_codes_rev
 import hopper
 
 # State space of 1D hopper (simplified):
@@ -173,23 +173,23 @@ class Hopper2D:
         # check friction cone violation
         base_rad = np.sin(friction) * self.constants.L
         cone_height = self.constants.L
-        cone_tip = [state.xf, state.yf, state.zf]  # foot is the tip of the cone
-        cone_dir = [0, 0, 1]  # TODO: do not hardcode this, use the terrain_normal_func
+        cone_tip = np.array([state.xf, state.yf, state.zf])  # foot is the tip of the cone
+        cone_dir = np.array([0, 0, 1])  # TODO: do not hardcode this, use the terrain_normal_func
         
-        body_loc = [state.x, state.y, state.z]
-        dist = np.dot(body_loc - cone_tip, cone_dir)
+        body_loc = np.array([state.xhat, state.yhat, state.zhat]) # This is already body_loc - cone_tip by def
+        dist = np.dot(body_loc,  cone_dir)
         rad = (dist/cone_height) * base_rad
-        orth_dist = np.linalg.norm((body_loc - cone_tip) - dist * cone_dir)
+        orth_dist = np.linalg.norm(body_loc - dist * cone_dir)
         if orth_dist > rad:
             return sim_codes["FRICTION_CONE"]
     
         # check body crash
-        if state.z < terrain_func(state.x, state.y):
+        if state.zhat + state.zf < terrain_func(state.xhat + state.xf, state.yhat + state.yf):
             return sim_codes["BODY_CRASH"]
 
-        tot_length = state.xhat**2 + state.yhat**2 + state.zhat**2
+        tot_length = np.sqrt(state.xhat**2 + state.yhat**2 + state.zhat**2)
         # check spring bottoming out
-        if tot_length < self.constants.Lf**2:
+        if tot_length < self.constants.Lf - 0.05:
             return sim_codes["SPRING_BOTTOM_OUT"]
 
         return sim_codes["SUCCESS"]
@@ -279,24 +279,26 @@ def main():
     state = FlightState2D()
     state.x = 0
     state.y = 0
-    state.z = 1.5
-    state.zf = 1.0
+    state.z = 1.1
+    state.zf = state.z - robot.constants.L
     state.xdot = 1
 
     x0_flight = state.getArray()
     terrain_func = lambda x,y: 0
     terrain_normal_func = lambda x,y: np.pi/2
-    u = [np.pi/10, 0]
+    u = [0, 0]
     code, flight_states, t_flight = robot.simulateOneFlightPhase(x0_flight,
                                                           u,
                                                           terrain_func,
                                                           till_apex = False,
                                                           hit_apex = True,
                                                           init_from_stance = False)
+    print(sim_codes_rev[code])
     last_flight_state = flight_states[-1]
     code, stance_states, t_stance = robot.simulateOneStancePhase(last_flight_state,
                                                           terrain_func,
                                                           terrain_normal_func, 0.8)
+    print(sim_codes_rev[code])
     
     last_stance_state = stance_states[-1]
     code, flight_states2, t_flight2 = robot.simulateOneFlightPhase(last_stance_state,
@@ -305,6 +307,7 @@ def main():
                                                           till_apex = False,
                                                           hit_apex = False,
                                                           init_from_stance = True)
+    print(sim_codes_rev[code])
     '''
     print("----Flight Phase----")
     for state in flight_states:
@@ -316,8 +319,12 @@ def main():
     '''
 
     fig, axs = plt.subplots(2, 1)
-    zs = np.concatenate((np.array(flight_states)[:,2], np.array(stance_states)[:,2], np.array(flight_states2)[:,2]))
-    xs = np.concatenate((np.array(flight_states)[:,0], np.array(stance_states)[:,0], np.array(flight_states2)[:,0]))
+    zs = np.concatenate((np.array(flight_states)[:,2],
+                         np.array(stance_states)[:,2],
+                         np.array(flight_states2)[:,2]))
+    xs = np.concatenate((np.array(flight_states)[:,0],
+                         np.array(stance_states)[:,0] + np.array(stance_states)[:,-3],
+                         np.array(flight_states2)[:,0]))
 
     f_t = np.arange(0, t_flight + t_stance + t_flight2 + 0.01, 0.01)
     axs[0].scatter(f_t, xs[:f_t.shape[0]], color = "blue")
