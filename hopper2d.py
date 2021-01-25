@@ -109,7 +109,7 @@ class Hopper2D:
     def getFootPosFromAngles(self, state, u):
         foot_x = state.x + self.constants.L * np.sin(u[0]) * np.cos(u[1])
         foot_y = state.y + self.constants.L * np.sin(u[0]) * np.sin(u[1])
-        foot_z = state.z - np.sqrt(self.constants.L**2 - (state.x - foot_x)**2 - (state.y - foot_y)**2)  # Hack, since Lf, x, and y should determine z
+        foot_z = state.z - np.sqrt(self.constants.L**2 - (state.x - foot_x)**2 - (state.y - foot_y)**2)  # Hack, since L, x, and y should determine z
         return foot_x, foot_y, foot_z
         
 
@@ -165,22 +165,16 @@ class Hopper2D:
     def checkFlightCollision(self, state, terrain_func):
         if state.z < terrain_func(state.x, state.y):
             return sim_codes["BODY_CRASH"]
-        if state.zf < terrain_func(state.xf, state.yf):
+        if state.zf < terrain_func(state.xf, state.yf) - 0.05:
             return sim_codes["FOOT_CRASH"]
         return sim_codes["SUCCESS"]
 
     def checkStanceCollision(self, state, terrain_func, terrain_normal_func, friction):
         # check friction cone violation
-        base_rad = np.sin(friction) * self.constants.L
-        cone_height = self.constants.L
-        cone_tip = np.array([state.xf, state.yf, state.zf])  # foot is the tip of the cone
-        cone_dir = np.array([0, 0, 1])  # TODO: do not hardcode this, use the terrain_normal_func
-        
-        body_loc = np.array([state.xhat, state.yhat, state.zhat]) # This is already body_loc - cone_tip by def
-        dist = np.dot(body_loc,  cone_dir)
-        rad = (dist/cone_height) * base_rad
-        orth_dist = np.linalg.norm(body_loc - dist * cone_dir)
-        if orth_dist > rad:
+        hyp = np.sqrt(state.xhat**2 + state.yhat**2)
+        angle = np.arctan(hyp/state.zhat)
+        r_lim = np.arctan(friction)
+        if angle > r_lim:
             return sim_codes["FRICTION_CONE"]
     
         # check body crash
@@ -240,9 +234,6 @@ class Hopper2D:
             ret_val = self.checkFlightCollision(state, terrain_func)
             if ret_val < 0:
                 break
-            if state.z < 0:
-                print("crossed ground!")
-                break
 
         return ret_val, flight_states, integrator.t
 
@@ -269,8 +260,44 @@ class Hopper2D:
         return code, stance_states, integrator.t
 
 
-# How to do this: generate ditches, or islands?
-def generateRandomTerrain2d():
+# Returns the success, next apex, touchdown location (last flight state)
+def getNextApex2D(robot, x_flight, angles, terrain_func,
+                  terrain_normal_func, friction, at_apex = True, return_count = False):
+    code, flight_states1, t = robot.simulateOneFlightPhase(x_flight, angles, terrain_func, till_apex = False, hit_apex = at_apex, init_from_stance = False, tstep = 0.01)
+    if code < 0:
+        if return_count:
+            return code, [], [], len(flight_states1)
+        else:
+            return code, [], []
+
+    code, stance_states, t_stance = robot.simulateOneStancePhase(flight_states1[-1], terrain_func, terrain_normal_func, friction, tstep = 0.01)
+    if code < 0:
+        if return_count:
+            return code, [], [], len(flight_states1) + len(stance_states)
+        else:
+            return code, [], []
+
+    code, flight_states2, t_flight = robot.simulateOneFlightPhase(stance_states[-1], [0, 0], terrain_func, till_apex = True, hit_apex = False, init_from_stance = True, tstep = 0.01)
+    if code < 0:
+        if return_count:
+            return code, [], [], len(flight_states1) + len(stance_states) + len(flight_states2)
+        else:
+            return code, [], []
+
+    code, flight_states3, t_flight = robot.simulateOneFlightPhase(flight_states2[-1], [0, 0], terrain_func, till_apex = False, hit_apex = True, init_from_stance = False, tstep = 0.01)
+    if code < 0:
+        if return_count:
+            return code, [], [], len(flight_states1) + len(stance_states) + len(flight_states2) + len(flight_states3)
+        else:
+            return code, [], []
+
+    if return_count:
+        return code, flight_states3[-1], flight_states2[-1], len(flight_states1) + len(stance_states) + len(flight_states2) + len(flight_states3)
+    else:
+        return code, flight_states3[-1], flight_states2[-1]
+    
+
+def generateRandomTerrain2d(max_x, max_y, disc, ):
     return
 
 
@@ -281,12 +308,14 @@ def main():
     state.y = 0
     state.z = 1.1
     state.zf = state.z - robot.constants.L
-    state.xdot = 1
+    state.xdot = 0
+    friction = 0.8
 
     x0_flight = state.getArray()
     terrain_func = lambda x,y: 0
     terrain_normal_func = lambda x,y: np.pi/2
-    u = [0, 0]
+    u = [-5 * np.pi/180, 0]
+    print(u)
     code, flight_states, t_flight = robot.simulateOneFlightPhase(x0_flight,
                                                           u,
                                                           terrain_func,
@@ -297,7 +326,7 @@ def main():
     last_flight_state = flight_states[-1]
     code, stance_states, t_stance = robot.simulateOneStancePhase(last_flight_state,
                                                           terrain_func,
-                                                          terrain_normal_func, 0.8)
+                                                          terrain_normal_func, friction)
     print(sim_codes_rev[code])
     
     last_stance_state = stance_states[-1]
