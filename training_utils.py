@@ -69,7 +69,7 @@ def convRNNValidation(model_eval, test_seq_batches, test_iv_batches, device):
         torch_ivs = torch.from_numpy(ivs).to(device)
         if torch_ivs.size(0) != batch_size or torch_inputs.size(0) != batch_size or torch_inputs.size(1) == 0:
             continue
-        output, hidden = model(torch_inputs, torch_ivs.view(1, torch_ivs.size(0), torch_ivs.size(1)))
+        output, hidden = model_eval(torch_inputs, torch_ivs.view(1, torch_ivs.size(0), torch_ivs.size(1)))
         output = output.view(-1)
         torch_targets = torch_targets.reshape(-1)
         output = output.to(device)

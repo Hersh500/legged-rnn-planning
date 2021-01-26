@@ -49,3 +49,19 @@ class DeadbeatStepController:
         if leg_angle < lower_lim:
             leg_angle = lower_lim
         return leg_angle
+
+class DeadbeatStepController2D:
+    def __init__(self, constants, pitch_net, roll_net, device):
+        self.constants = constants
+        self.pitch_net = pitch_net
+        self.roll_net = roll_net
+        self.device = device
+
+    # TODO: copy this to colab notebook
+    def calcAngle(self, x_Lstep, xdot, y_Lstep, ydot, z):
+        x_point = torch.from_numpy(np.array([xdot, x_Lstep])).float().to(self.device)
+        y_point = torch.from_numpy(np.array([ydot, y_Lstep])).float().to(self.device)
+        pitch = self.pitch_net(x_point).detach().cpu().numpy()[0]
+        roll = self.roll_net(y_point).detach().cpu().numpy()[0]
+        return [pitch, roll]
+        

@@ -381,9 +381,27 @@ def atGoal(node, goal_state):
     return loc[0] >= goal_state[0] and loc[1] >= goal_state[1]
 
 
+def inOrderHelper2D(root_node, goal):
+  all_paths = []
+  all_angles = []
+  if len(root_node.children) == 0:
+    if atGoal(root_node, goal):
+      all_paths = [[root_node.x_loc]]
+      all_angles = [[root_node.prev_angle]]
+    else:
+      all_paths = [[]]
+      all_angles = [[]]
+  for child in root_node.children:
+    paths, angles = inOrderHelper(child, goal)
+    for i, p in enumerate(paths):
+      all_paths.append([root_node.x_loc] + paths[i])
+      all_angles.append([root_node.prev_angle] + angles[i])
+  return all_paths, all_angles
+
+
 def angleAstar2Dof(robot, x0_apex, goal_state, num_samples_sqrt, 
                    num_goal_des, cost_fn, terrain_func, terrain_normal_func,
-                   friction):
+                   friction, get_full_tree = False):
     pq = queue.PriorityQueue()
     goal_nodes = []
     num_goal_nodes = 0
@@ -393,6 +411,7 @@ def angleAstar2Dof(robot, x0_apex, goal_state, num_samples_sqrt,
     total_odes = 0
 
     cur_node = GraphNode([x0_apex[0], x0_apex[1]], 0, x0_apex, 0, 0, None, [])
+    root_node = cur_node
     deepest_node = cur_node
     cur_apex = x0_apex
     time_till_ground = 2 * (x0_apex[2] - robot.constants.L)/(-robot.constants.g)
@@ -421,7 +440,6 @@ def angleAstar2Dof(robot, x0_apex, goal_state, num_samples_sqrt,
               neighbors = [last_flights[i-1]]
             
             cost = cost_fn(last_flights[i], neighbors, goal_state, step) + np.random.randn() * 1e-4
-            # record the footstep location, and the FOLLOWING apex
             # print("considering node with loc", [last_flights[i][0], last_flights[i][1]])
             node = GraphNode([last_flights[i][0], last_flights[i][1]], angles[i], next_apexes[i], step,
                              cost + cur_node.value, cur_node, [])
@@ -446,11 +464,15 @@ def angleAstar2Dof(robot, x0_apex, goal_state, num_samples_sqrt,
         print("Couldn't find full path!")
         return [], []
     
-    all_locs, all_angles = [], []
-    for goal_node in goal_nodes:
-        locs = path_from_parent(goal_node)
-        all_locs.append(locs)
-    return all_locs, all_angles
+    if get_full_tree:
+        all_paths, all_angles = inOrderHelper2D(root_node, goal_state)
+        return all_paths, total_odes
+    else:
+        all_locs, all_angles = [], []
+        for goal_node in goal_nodes:
+            locs = path_from_parent(goal_node)
+            all_locs.append(locs)
+    return all_locs, total_odes
 
 
 def cost_fn(state, neighbors, goal_state, step):
@@ -480,9 +502,9 @@ def main():
     initial_state.zf = initial_state.z - robot.constants.L
     initial_apex = initial_state.getArray()
     goal = [5, 0, 0, 0]
-    paths = angleAstar2Dof(robot, initial_apex, goal, 12, 
-                           1, cost_fn, terrain_func, terrain_normal_func,
-                           friction)
+    paths, odes = angleAstar2Dof(robot, initial_apex, goal, 12, 
+                           3, cost_fn, terrain_func, terrain_normal_func,
+                           friction, get_full_tree = False)
     print(paths)
     return
 

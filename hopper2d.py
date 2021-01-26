@@ -2,6 +2,7 @@ import numpy as np
 import math
 from scipy.integrate import ode, odeint
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 
 from hopper import sim_codes, sim_codes_rev
 import hopper
@@ -297,7 +298,54 @@ def getNextApex2D(robot, x_flight, angles, terrain_func,
         return code, flight_states3[-1], flight_states2[-1]
     
 
-def generateRandomTerrain2d(max_x, max_y, disc, ):
+# disc is the length of one side of each square (discretized)
+def generateRandomTerrain2D(max_x, max_y, disc, num_ditches):
+    # max width in any single dimension
+    max_width = 2
+    min_width = 1
+    terrain_array = np.zeros((int(max_x/disc), int(max_y/disc)))
+    prev_ditch_end_x = 0
+    prev_ditch_end_y = 0
+    for _ in range(num_ditches):
+        cur_ditch_x = np.random.rand() * max_x + 1
+        cur_ditch_y = np.random.rand() * max_y
+        cur_ditch_x_width = np.random.rand() * (max_width - min_width) + min_width
+        cur_ditch_y_width = np.random.rand() * (max_width - min_width) + min_width
+        # print(cur_ditch_x, cur_ditch_y, cur_ditch_x_width, cur_ditch_y_width)
+        
+        prev_ditch_end_x = cur_ditch_x + cur_ditch_x_width
+        prev_ditch_end_y = cur_ditch_y + cur_ditch_y_width
+        x_start_idx, x_end_idx = int(cur_ditch_x/disc), int(prev_ditch_end_x/disc)
+        # print(x_start_idx, x_end_idx)
+        y_start_idx, y_end_idx = int(cur_ditch_y/disc), int(prev_ditch_end_y/disc)
+        # print(y_start_idx, y_end_idx)
+        terrain_array[x_start_idx:x_end_idx, y_start_idx:y_end_idx] = -1  # TODO: vary this depth
+    
+    def terrain_func(x, y):
+        x_disc = int(x/disc)
+        y_disc = int(y/disc)
+        if x < 0:
+            return 2
+        elif y < 0:
+            return 2
+        else:
+            return terrain_array[x_disc][y_disc]
+
+    return terrain_array, terrain_func
+
+
+def plotTerrain2D(ax, terrain_array, disc):
+    x = np.arange(0, terrain_array.shape[0], 1)
+    y = np.arange(0, terrain_array.shape[1], 1)
+    xx, yy = np.meshgrid(x, y)
+    zz = terrain_array[xx, yy]
+    ax.plot_surface(xx * disc, yy * disc, zz, color="green")
+    ax.set_zlim(-0.5, 1.5)
+    return
+
+
+# disc is the length of one side of each square (discretized)
+def generateTerrain2D(max_x, max_y, disc, num_ditches):
     return
 
 
@@ -360,5 +408,12 @@ def main():
     axs[1].scatter(f_t, zs[:f_t.shape[0]], color = "blue")
     plt.show()
 
+def main2():
+    terrain_array, terrain_func = generateRandomTerrain2D(8, 4, 0.25, 5)
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    plotTerrain2D(ax, terrain_array, 0.25)
+    plt.show()
+     
 if __name__ == "__main__":
-    main()
+    main2()
