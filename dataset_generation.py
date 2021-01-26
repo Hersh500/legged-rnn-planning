@@ -1,6 +1,7 @@
 import numpy as np
 
 import hopper
+import hopper2d
 import astar_tree_search
 from astar_tree_search import aStarHelper
 # from astar_tree_search import footSpaceAStar 
@@ -54,6 +55,125 @@ def generateNFeasibleSteps(robot, n,
     return steps_list, angles_list
   else:
     return None, None
+
+def main():
+    robot = hopper2d.Hopper2D(hopper.Constants())
+    initial_states, initial_terrains, sequences = generateRandomSequences2D(robot,
+                                                                      num_terrains = 5, 
+                                                                      num_apexes = 1,
+                                                                      num_astar_sequences = 1,
+                                                                      min_steps = 4,
+                                                                      friction = 0.6,
+                                                                      cost_fn = astar_tree_search.cost_fn2d,
+                                                                      full_tree = False,
+                                                                      progress = 0.1,
+                                                                      seed = 42)
+    print(sequences)
+
+    
+def generateRandomSequences2D(robot,
+                            num_terrains, 
+                            num_apexes,
+                            num_astar_sequences,
+                            min_steps,
+                            friction,
+                            cost_fn = astar_tree_search.stateCost,
+                            full_tree = False,
+                            progress = 0.5,
+                            seed = 42):
+  
+  np.random.seed(seed)
+  initial_states = []
+  initial_terrains = []
+  sequences = [] # list of lists of feasible steps
+  final_apexes = []
+  until_x = 8
+  until_y = 4
+  disc = 0.25 
+
+  max_z = 1.5
+  min_z = 0.8
+
+  min_x_dot = -1
+  max_x_dot = 3
+  min_y_dot = -1
+  max_y_dot = 2
+
+  terrain_arrays = []
+  terrain_functions = []
+
+  for num_ditches in range(1, 6):
+    for _ in range(num_terrains//5):
+        terrain_array, terrain_func = hopper2d.generateRandomTerrain2D(until_x, until_y, disc, num_ditches)
+        terrain_arrays.append(terrain_array)
+        terrain_functions.append(terrain_func)
+
+  random_initial_apexes = np.zeros((max(50, num_apexes), 13))
+  for a in range(random_initial_apexes.shape[0]):
+    initial_state = hopper2d.FlightState2D()
+    initial_state.xdot = np.random.rand() * (max_x_dot - min_x_dot) + min_x_dot
+    initial_state.ydot = np.random.rand() * (max_y_dot - min_y_dot) + min_y_dot
+    initial_state.z = np.random.rand() * (max_z - min_z) + min_z
+    initial_state.zf = initial_state.z - robot.constants.L
+
+    state_array = initial_state.getArray()
+    random_initial_apexes[a] = np.array(state_array)
+
+  max_tries = 4
+  for i in range(len(terrain_arrays)):
+    this_arr = terrain_arrays[i].tolist()
+    random_indices = (np.random.rand(num_apexes) * random_initial_apexes.shape[0]).astype(int)
+    apexes = random_initial_apexes[random_indices]
+    for initial_apex in apexes:
+      success_count = 0
+      num_tries = 0
+      while success_count < num_astar_sequences and num_tries < max_tries:
+        step_sequences, count = astar_tree_search.angleAstar2Dof(robot,
+                                              initial_apex,
+                                              [8, 0, 0, 0],
+                                              12,
+                                              num_astar_sequences,
+                                              cost_fn,
+                                              terrain_functions[i],
+                                              lambda x,y:np.pi/2,
+                                              friction,
+                                              get_full_tree = True)
+        for l, ss in enumerate(step_sequences):
+          cond = len(ss) > min_steps and ss[-1][0] >= ss[0][0]
+          for s in range(1, len(ss)):
+            cond = cond and (ss[s][0] > ss[s-1][0] - progress)
+          if cond:
+            success_count += 1
+            # xdot, ydot, z height
+            initial_condition = [initial_apex[3], initial_apex[4], initial_apex[2]]
+            initial_terrains.append(this_arr)
+            sequences.append(ss)
+            initial_states.append(initial_condition)
+        if success_count < num_astar_sequences:
+          step_sequences, count = astar_tree_search.angleAstar2Dof(robot,
+                                                 initial_apex,
+                                                 [8, 0, 0, 0],
+                                                 15,
+                                                 num_astar_sequences,
+                                                 cost_fn,
+                                                 terrain_functions[i],
+                                                 lambda x,y:np.pi/2,
+                                                 friction,
+                                                 get_full_tree = True)
+          for l, ss in enumerate(step_sequences):
+            cond = len(ss) > min_steps and ss[-1][0] >= ss[0][0]
+            for s in range(1, len(ss)):
+              cond = cond and (ss[s][0] > ss[s-1][0] - progress)
+            if cond:
+              success_count += 1
+              # xdot, ydot, z height
+              initial_condition = [initial_apex[3], initial_apex[4], initial_apex[2]]
+              initial_terrains.append(this_arr)
+              sequences.append(ss)
+              initial_states.append(initial_condition)
+          num_tries += 1
+    print("finished terrain", i)
+  return initial_states, initial_terrains, sequences
 
 
 def generateRandomSequences(robot,
@@ -296,3 +416,7 @@ def generateRandomSequences2(num_terrains,
 
     print("finished terrain", i)
   return initial_states, sequences
+
+
+if __name__ == "__main__":
+    main()

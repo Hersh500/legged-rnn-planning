@@ -199,6 +199,68 @@ class StepSequenceModelConv(nn.Module):
     return out, hidden
 
 
+# TODO: fix this model
+class StepSequenceModelConv2D(nn.Module):
+  def __init__(self, init_dim, input_size1, input_size2, output_size, hidden_dim, n_layers,
+               use_lstm, ksize):
+    super(StepSequenceModelConv2D, self).__init__()
+
+    self.hidden_dim = hidden_dim
+    self.n_layers = n_layers
+    self.using_lstm = use_lstm
+    self.input_size = input_size
+
+    # not actually used in the convolution kernel definition
+    dilation = 1
+    padding = 0
+    
+    num_layers2 = 3
+    l1_size = (input_size - 2 * padding - dilation * (ksize - 1) - 1) + 1
+    l2_size = (l1_size - 2 * padding - dilation * (ksize - 1) -1) + 1
+    linear_layer_input_size = l2_size * num_layers2
+    
+    if use_lstm:
+      self.rnn = nn.LSTM(input_size, hidden_dim, n_layers, batch_first = True)
+    else:
+      self.rnn = nn.RNN(input_size, hidden_dim, n_layers, batch_first = True, 
+                        nonlinearity = "tanh")
+    
+    self.init_net = nn.Sequential(nn.Linear(init_dim, hidden_dim),
+                                  nn.Tanh()
+                                  )
+    # the dimension of the output of this will be (1 x something...)
+    self.conv_input = nn.Sequential(nn.Conv1d(2, 3, ksize),
+                                    nn.ReLU(),
+                                    nn.Conv1d(3, num_layers2, ksize))
+    self.input_fc = nn.Linear(linear_layer_input_size, input_size)
+
+    self.out_net = nn.Sequential(nn.Linear(hidden_dim, output_size))
+
+  def forward(self, x, init):
+    hiddens0 = self.init_net(init)
+    cells0 = self.init_net(init)
+    hiddens = hiddens0
+    cells = cells0
+    for k in range(1, self.n_layers):
+      hiddens = torch.cat((hiddens, hiddens0.detach().clone()), dim = 0)
+      cells = torch.cat((cells, cells0.detach().clone()), dim = 0)
+    
+    # this is a bigly hack.
+    rnn_input = torch.zeros((x.size(0), x.size(1), self.input_size)).to(x.device)
+    for i in range(0, x.size(1)):
+      interm = self.conv_input(x[:,i,:,:]).view(x.size(0), -1)
+      interm = interm.view(x.size(0), -1)
+      interm = self.input_fc(interm)
+      rnn_input[:,i,:] = interm
+    if self.using_lstm:
+      out, hidden = self.rnn(rnn_input, (hiddens, cells))
+    else:
+      out, hidden = self.rnn(rnn_input, hiddens)
+
+    out = self.out_net(out)
+    return out, hidden
+
+
 ### MODEL EVALUATION FUNCTIONS ###
 
 # assume input_seq is of shape (batch_size, seq_len, 190)

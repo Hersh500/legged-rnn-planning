@@ -425,7 +425,7 @@ def angleAstar2Dof(robot, x0_apex, goal_state, num_samples_sqrt,
         # add to the pq
         # dequeue top node
     while num_goal_nodes < num_goal_des and iters < timeout:
-        print("on node with apex", cur_node.apex[0:2], "step loc:", cur_node.x_loc)
+        # print("on node with apex", cur_node.apex[0:2], "step loc:", cur_node.x_loc)
         next_apexes, last_flights, angles, total_count = sampleAngles2D(robot, num_samples_sqrt, cur_apex, 
                                                                         terrain_func, terrain_normal_func, friction)
         total_odes += total_count
@@ -475,7 +475,7 @@ def angleAstar2Dof(robot, x0_apex, goal_state, num_samples_sqrt,
     return all_locs, total_odes
 
 
-def cost_fn(state, neighbors, goal_state, step):
+def cost_fn2d(state, neighbors, goal_state, step):
     x = state[0]
     y = state[1]
     return np.abs(x - goal_state[0]) + 2 * np.abs(y - goal_state[1])

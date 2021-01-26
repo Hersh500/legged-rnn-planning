@@ -22,25 +22,29 @@ def plot_robot(body_pose, foot_pose, ax):
             [body_pose[2], foot_pose[2]])
     return
 
+def plotTerrain2D(ax, terrain_array, disc):
+    x = np.arange(0, terrain_array.shape[0], 1)
+    y = np.arange(0, terrain_array.shape[1], 1)
+    xx, yy = np.meshgrid(x, y)
+    zz = terrain_array[xx, yy]
+    ax.plot_surface(xx * disc, yy * disc, zz, color="green")
+    return
 
-def animateMoving2DHopper(body_poses, foot_poses):
+def animateMoving2DHopper(terrain_array, disc, body_poses, foot_poses):
     fig = plt.figure()
     ax = fig.add_subplot(111, projection="3d")
     
     def animFunc(i):
         ax.clear()
-        ax.set_ylim(-1, 5)
-        ax.set_zlim(-1, 3)
-        ax.set_xlim(-1, 5)
+        ax.set_ylim(-1, disc * terrain_array.shape[1])
+        ax.set_zlim(0.5, 1.5)
+        ax.set_xlim(-1, disc * terrain_array.shape[0])
         plot_robot(body_poses[i], foot_poses[i], ax)
-        plot_terrain(
+        plotTerrain2D(ax, terrain_array, disc)
         return
 
     sim = animation.FuncAnimation(fig, animFunc, frames = range(len(body_poses)))
-    sim.save(filename = "test.mp4", fps = 10, dpi = 100)
-    return
-
-def plot_terrain_3d(terrain_func, ax, disc, horizon):
+    sim.save(filename = "test.mp4", fps = 100, dpi = 100)
     return
 
 

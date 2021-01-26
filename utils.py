@@ -110,6 +110,9 @@ def plotHiddens(hidden_state):
 
 ### DATA UTILITIES ###
 
+def oneHotEncodeSequences2D(sequences, max_x, max_y, disc):
+    return
+
 # sequences is a (n x sequence_length array)
 # outputs a (n_seq x seq_len x pos_len) list 
 def oneHotEncodeSequences(sequences, max_lim = 8, min_lim = -3, disc = 0.1):

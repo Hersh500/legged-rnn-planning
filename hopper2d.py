@@ -324,29 +324,18 @@ def generateRandomTerrain2D(max_x, max_y, disc, num_ditches):
     def terrain_func(x, y):
         x_disc = int(x/disc)
         y_disc = int(y/disc)
-        if x < 0:
+        if x < -1:
             return 2
-        elif y < 0:
+        elif y < -1:
             return 2
+        elif x > max_x:
+            return 0
+        elif y > max_y:
+            return 0
         else:
             return terrain_array[x_disc][y_disc]
 
     return terrain_array, terrain_func
-
-
-def plotTerrain2D(ax, terrain_array, disc):
-    x = np.arange(0, terrain_array.shape[0], 1)
-    y = np.arange(0, terrain_array.shape[1], 1)
-    xx, yy = np.meshgrid(x, y)
-    zz = terrain_array[xx, yy]
-    ax.plot_surface(xx * disc, yy * disc, zz, color="green")
-    ax.set_zlim(-0.5, 1.5)
-    return
-
-
-# disc is the length of one side of each square (discretized)
-def generateTerrain2D(max_x, max_y, disc, num_ditches):
-    return
 
 
 def main():
