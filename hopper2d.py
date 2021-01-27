@@ -303,7 +303,8 @@ def generateRandomTerrain2D(max_x, max_y, disc, num_ditches):
     # max width in any single dimension
     max_width = 2
     min_width = 1
-    terrain_array = np.zeros((int(max_x/disc), int(max_y/disc)))
+    # y is rows, x is columns
+    terrain_array = np.zeros((int(max_y/disc), int(max_x/disc)))
     prev_ditch_end_x = 0
     prev_ditch_end_y = 0
     for _ in range(num_ditches):
@@ -319,7 +320,7 @@ def generateRandomTerrain2D(max_x, max_y, disc, num_ditches):
         # print(x_start_idx, x_end_idx)
         y_start_idx, y_end_idx = int(cur_ditch_y/disc), int(prev_ditch_end_y/disc)
         # print(y_start_idx, y_end_idx)
-        terrain_array[x_start_idx:x_end_idx, y_start_idx:y_end_idx] = -1  # TODO: vary this depth
+        terrain_array[y_start_idx:y_end_idx, x_start_idx:x_end_idx] = -1  # TODO: vary this depth
     
     def terrain_func(x, y):
         x_disc = int(x/disc)
@@ -333,7 +334,7 @@ def generateRandomTerrain2D(max_x, max_y, disc, num_ditches):
         elif y > max_y:
             return 0
         else:
-            return terrain_array[x_disc][y_disc]
+            return terrain_array[y_disc][x_disc]
 
     return terrain_array, terrain_func
 

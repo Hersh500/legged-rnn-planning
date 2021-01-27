@@ -3,8 +3,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
-
 import utils
+
+
 '''
     Vanilla RNN that uses the terrain + initial apex to initialize the hidden state
     Input: previous step (as a one-hot vector)
@@ -199,25 +200,32 @@ class StepSequenceModelConv(nn.Module):
     return out, hidden
 
 
-# TODO: fix this model
+def convOutputSize(width, height, ksize, padding, stride):
+    out_width = (width - ksize + 2 * padding)/stride + 1
+    out_height = (height - ksize + 2 * padding)/stride + 1
+    return out_width, out_height
+
+
 class StepSequenceModelConv2D(nn.Module):
-  def __init__(self, init_dim, input_size1, input_size2, output_size, hidden_dim, n_layers,
-               use_lstm, ksize):
+  def __init__(self, init_dim, in_width, in_height, in_size, 
+               hidden_dim, n_layers, ksize):
     super(StepSequenceModelConv2D, self).__init__()
 
     self.hidden_dim = hidden_dim
     self.n_layers = n_layers
     self.using_lstm = use_lstm
     self.input_size = input_size
+    self.output_side = in_width * in_height
 
     # not actually used in the convolution kernel definition
     dilation = 1
     padding = 0
     
     num_layers2 = 3
-    l1_size = (input_size - 2 * padding - dilation * (ksize - 1) - 1) + 1
-    l2_size = (l1_size - 2 * padding - dilation * (ksize - 1) -1) + 1
-    linear_layer_input_size = l2_size * num_layers2
+    out_width, out_height = convOutputSize(in_width, in_height, ksize, padding, 1)
+    out_width, out_height = convOutputSize(out_width, out_height, ksize, padding, 1)
+
+    linear_layer_input_size = out_width * out_height * num_layers2
     
     if use_lstm:
       self.rnn = nn.LSTM(input_size, hidden_dim, n_layers, batch_first = True)
@@ -226,16 +234,16 @@ class StepSequenceModelConv2D(nn.Module):
                         nonlinearity = "tanh")
     
     self.init_net = nn.Sequential(nn.Linear(init_dim, hidden_dim),
-                                  nn.Tanh()
-                                  )
+                                  nn.Tanh())
+
     # the dimension of the output of this will be (1 x something...)
     self.conv_input = nn.Sequential(nn.Conv1d(2, 3, ksize),
                                     nn.ReLU(),
                                     nn.Conv1d(3, num_layers2, ksize))
     self.input_fc = nn.Linear(linear_layer_input_size, input_size)
-
     self.out_net = nn.Sequential(nn.Linear(hidden_dim, output_size))
 
+  # x is (batch_size, seq_len, 2, y, x)
   def forward(self, x, init):
     hiddens0 = self.init_net(init)
     cells0 = self.init_net(init)
@@ -248,8 +256,8 @@ class StepSequenceModelConv2D(nn.Module):
     # this is a bigly hack.
     rnn_input = torch.zeros((x.size(0), x.size(1), self.input_size)).to(x.device)
     for i in range(0, x.size(1)):
-      interm = self.conv_input(x[:,i,:,:]).view(x.size(0), -1)
-      interm = interm.view(x.size(0), -1)
+      interm = self.conv_input(x[:,i,:,:,:]).view(x.size(0), -1)
+      # interm = interm.view(x.size(0), -1)
       interm = self.input_fc(interm)
       rnn_input[:,i,:] = interm
     if self.using_lstm:
@@ -262,6 +270,17 @@ class StepSequenceModelConv2D(nn.Module):
 
 
 ### MODEL EVALUATION FUNCTIONS ###
+# sequences shape: (batch_size, seq_len, y, x)
+# terrains shape: (batch_size, y, x)
+# output shape: (batch_size, seq_len, 2, y, x)
+def stackDataforConvNet2D(terrains, sequences):
+    batch_size = sequences.shape[0]
+    seq_len = sequences.shape[1]
+    output = np.zeros((batch_size, seq_len, 2, sequences.shape[2], sequences.shape[3]))
+    output[:,:,1,:,:] = sequences
+    for i in range(0, seq_len):
+        output[:,i,0,:,:] = terrains
+    return output
 
 # assume input_seq is of shape (batch_size, seq_len, 190)
 # return is shaped (batch_size, seq_len, 2, 110)

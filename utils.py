@@ -109,9 +109,33 @@ def plotHiddens(hidden_state):
 
 
 ### DATA UTILITIES ###
+def stepVectorToMatrix(step_vector, rows, cols):
+    return step_vector.reshape((rows, cols))
+
+
+# returns x,y in meters
+def softmaxMatrixToXY(matrix, max_x, max_y, disc):
+    vec = matrix.reshape((1, -1))
+    idx = np.argmax(vec)
+    num_cols = int(max_x/disc)
+    x = idx%num_cols * disc
+    y = idx//num_cols * disc
+    return [x, y]
+
 
 def oneHotEncodeSequences2D(sequences, max_x, max_y, disc):
-    return
+    output = []
+    for sequence in sequences:
+        seq_oh = []
+        for pos in sequence:
+            arr = np.zeros((int(max_y/disc), int(max_x/disc)))
+            x = np.clip(int(pos[0]/disc), 0, max_x/disc)
+            y = np.clip(int(pos[1]/disc), 0, max_y/disc)
+            arr[y][x] = 1
+            seq_oh.append(arr.tolist())
+        output.append(seq_oh)
+    return output
+
 
 # sequences is a (n x sequence_length array)
 # outputs a (n_seq x seq_len x pos_len) list 
@@ -159,6 +183,35 @@ def softmaxToOH(softmax_torch):
   return oh_tensor
 
 
+def batch_sequence_data2D(initial_states, terrains, sequences, batch_size = 64):
+    sequence_len_map = {}
+    for index, sequence in enumerate(sequences):
+        if len(sequence) in sequence_len_map.keys():
+            sequence_len_map[len(sequence)].append(index)
+        else:
+            sequence_len_map[len(sequence)] = [index]
+    sequence_batches = []
+    initial_states_batches = []
+    terrains_batches = []
+    for seq_len in sequence_len_map.keys():
+        indices = sequence_len_map[seq_len]
+        count = 0
+        while count < len(indices):
+            end_idx = min(len(indices), count + batch_size)
+            seq_batch = []
+            iv_batch = []
+            t_batch = []
+            for k in range(count, end_idx):
+                seq_batch.append(sequences[indices[k]])
+                iv_batch.append(initial_states[indices[k]])
+                t_batch.append(terrains[indices[k]])
+            sequence_batches.append(seq_batch)
+            initial_states_batches.append(iv_batch)
+            terrains_batches.append(t_batch)
+            count = end_idx
+    return sequence_batches, terrains_batches, initial_states_batches
+
+
 def batch_sequence_data(initial_values, sequences, batch_size = 64):
   sequence_len_map = {}
   for index, sequence in enumerate(sequences):
@@ -184,11 +237,17 @@ def batch_sequence_data(initial_values, sequences, batch_size = 64):
   return sequence_batches, initial_values_batches
 
 
-def shuffleLists(list1, list2):
-  c = list(zip(list1, list2))
-  random.shuffle(c)
-  list1_shuf, list2_shuf = zip(*c)
-  return list1_shuf, list2_shuf
+def shuffleLists(list1, list2, list3 = None):
+  if list3 is not None:
+    c = list(zip(list1, list2, list3))
+    random.shuffle(c)
+    list1_shuf, list2_shuf, list3_shuf = zip(*c)
+    return list1_shuf, list2_shuf, list3_shuf
+  else:
+    c = list(zip(list1, list2))
+    random.shuffle(c)
+    list1_shuf, list2_shuf = zip(*c)
+    return list1_shuf, list2_shuf
 
 
 def prepareBatches(seqs, init_vals):
@@ -203,11 +262,10 @@ def prepareBatches(seqs, init_vals):
   return input_seqs, target_seqs, ivs
 
 
-
 def createDataBatches(inputs, init_states, batch_size = 64, train_pct = 0.9):
   input_batches, initial_states_batches = batch_sequence_data(init_states,
-                                                                 inputs,
-                                                                 batch_size = 64)
+                                                              inputs,
+                                                              batch_size = 64)
   
   num_batches = len(input_batches)
   seq_shuf, iv_shuf = shuffleLists(input_batches, initial_states_batches)
@@ -218,3 +276,22 @@ def createDataBatches(inputs, init_states, batch_size = 64, train_pct = 0.9):
   test_iv_batches = iv_shuf[int(train_pct * num_batches):]
 
   return train_seq_batches, train_iv_batches, test_seq_batches, test_iv_batches
+
+
+def createDataBatches2Dof(sequences, terrains, init_states, batch_size = 64, train_pct = 0.9):
+  input_batches, terrain_batches, initial_states_batches = batch_sequence_data2D(init_states,
+                                                                                 terrains,
+                                                                                 sequences,
+                                                                                 batch_size = 64)
+  
+  num_batches = len(input_batches)
+  seq_shuf, iv_shuf, terrain_shuf = shuffleLists(input_batches, initial_states_batches, terrain_batches)
+  train_seq_batches = seq_shuf[:int(train_pct * num_batches)]
+  train_iv_batches = iv_shuf[:int(train_pct * num_batches)]
+  train_terrain_batches = terrain_shuf[:int(train_pct * num_batches)]
+
+  test_seq_batches = seq_shuf[int(train_pct * num_batches):]
+  test_iv_batches = iv_shuf[int(train_pct * num_batches):]
+  test_terrain_batches = terrain_shuf[int(train_pct * num_batches):]
+
+  return train_seq_batches, train_terrain_batches, train_iv_batches, test_seq_batches, test_terrain_batches, test_iv_batches
