@@ -298,6 +298,33 @@ def getNextApex2D(robot, x_flight, angles, terrain_func,
         return code, flight_states3[-1], flight_states2[-1]
     
 
+# ditch_info is a 2D array:
+# [[ditch_x, ditch_y, x_width, y_width]]
+def generateTerrain2D(max_x, max_y, disc, ditch_info):
+    terrain_array = np.zeros((int(max_y/disc), int(max_x/disc)))
+    for ditch in ditch_info:
+        x_idx = int(ditch[0]/disc)
+        y_idx = int(ditch[1]/disc)
+        x_end = int((ditch[0] + ditch[2])/disc)
+        y_end = int((ditch[1] + ditch[3])/disc)
+        terrain_array[y_idx:y_end, x_idx:x_end] = -1
+    
+    def terrain_func(x, y):
+        x_disc = int(x/disc)
+        y_disc = int(y/disc)
+        if x < -1:
+            return 2
+        elif y < -1:
+            return 2
+        elif x > max_x:
+            return 0
+        elif y > max_y:
+            return 0
+        else:
+            return terrain_array[y_disc][x_disc]
+    return terrain_array, terrain_func
+
+
 # disc is the length of one side of each square (discretized)
 def generateRandomTerrain2D(max_x, max_y, disc, num_ditches):
     # max width in any single dimension

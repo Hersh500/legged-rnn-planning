@@ -328,6 +328,33 @@ def evaluateConvModel(model, n, initial_apex, first_step, terrain_list, device, 
 
 
 '''
+    Evaluate StepSequenceModelConv on a terrain + apex scenario
+    TODO: beautify this code it looks disgusting
+'''
+def evaluateConvModel2D(model, n, initial_apex, first_step, terrain_array, device, T=1, max_x = 8, max_y = 4, disc = 0.25):
+  datapoint = np.array([initial_apex[3], initial_apex[4], initial_apex[2]])
+  init_state = torch.FloatTensor(datapoint).view(1, 1, -1).to(device)
+  prev_steps_oh = utils.oneHotEncodeSequences2D(first_step, max_x, max_y, disc)
+  prev_steps_oh = prev_steps_oh.reshape(1, 1, prev_steps_oh.shape[0], prev_steps_oh.shape[1])
+  inp = stackDataforConvNet(prev_steps_oh, terrain_array)
+  input = torch.from_numpy(inp).to(device)
+  outs = []
+  hiddens = []
+  softmaxes = []
+  for i in range(n):
+    out, hidden = model(input, init_state)
+    out = out[:,-1].view(1, 1, -1)  # dividing by T is temperature scaling
+    outs.append(utils.softmaxToStep(out)[0][0].item())
+    hiddens.append(hidden)
+    out_processed = F.softmax(out, dim = 2)
+    softmaxes.append(F.softmax(out/T, dim = 2))
+    out_and_terrain = torch.cat((torch_terrain, out_processed), dim = 1)
+    out_and_terrain = out_and_terrain.view(1 ,1, 2, -1)
+    input = torch.cat((input, out_and_terrain.float()), dim=1)
+  return outs, softmaxes, hiddens
+
+
+'''
     Evaluate a StepSequenceModel or StepSequenceModelLSTM that has been trained
     to use terrain+OH step as input (as opposed to using it to initialize the hidden state)
 '''

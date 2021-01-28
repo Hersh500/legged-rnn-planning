@@ -278,6 +278,19 @@ def createDataBatches(inputs, init_states, batch_size = 64, train_pct = 0.9):
   return train_seq_batches, train_iv_batches, test_seq_batches, test_iv_batches
 
 
+def prepareBatches2Dof(seqs, init_vals, terrains):
+  seqs = np.array([np.array(i, dtype = np.float32) for i in seqs])
+  ivs = np.array([np.array(i, dtype = np.float32) for i in init_vals])
+  terrans = np.array([np.array(i, dtype = np.float32) for i in terrains])
+
+  input_seqs = seqs[:,:-1]
+  target_seqs = seqs[:,1:]
+
+  # input_seqs = np.reshape(input_seqs, (input_seqs.shape[0], input_seqs.shape[1], 1))
+  # target_seqs = np.reshape(target_seqs, (target_seqs.shape[0], target_seqs.shape[1], 1))
+  return input_seqs, target_seqs, ivs, terrains
+
+
 def createDataBatches2Dof(sequences, terrains, init_states, batch_size = 64, train_pct = 0.9):
   input_batches, terrain_batches, initial_states_batches = batch_sequence_data2D(init_states,
                                                                                  terrains,
