@@ -313,7 +313,7 @@ def RNNGuidedAstar(robot,
     _, softmaxes = rnn_planner.predict(1, planning_apex, t_array, prev_steps)
 
     distribution = softmaxes[-1].cpu().detach().numpy()[0][0]
-    next_samples = discrete_sampling(distribution, num_samples, min = -3, max = 8)
+    next_samples = discrete_sampling2D(distribution, num_samples, min = -3, max = 8)
     for sample in next_samples:
       input = step_controller.calcAngle(sample, cur_apex[2], 0, 0, y = cur_apex[1])
       apex1, apex2, last_flight, count = hopper.getNextState2Count(robot,
