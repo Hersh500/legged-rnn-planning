@@ -226,10 +226,12 @@ def aStarHelper(robot, x0_apex, goal, num_goal_nodes,
 
 def path_from_parent(node):
   steps = []
+  angles = []
   while node is not None:
     steps.append(node.x_loc)
+    angles.append(node.prev_angle)
     node = node.parent
-  return steps[::-1]
+  return steps[::-1], angles[::-1]
 
 def path_from_parent2(node):
   steps = []
@@ -406,7 +408,7 @@ def angleAstar2Dof(robot, x0_apex, goal_state, num_samples_sqrt,
     goal_nodes = []
     num_goal_nodes = 0
     iters = 0
-    timeout = 1000
+    timeout = 3000
     step = 0
     total_odes = 0
 
@@ -460,25 +462,26 @@ def angleAstar2Dof(robot, x0_apex, goal_state, num_samples_sqrt,
         step = cur_node.step + 1
         iters += 1
 
-    if num_goal_nodes == 0:
-        print("Couldn't find full path!")
-        return [], []
+    if num_goal_nodes == 0 and not get_full_tree:
+        # print("Couldn't find full path!")
+        return [], [], total_odes
     
     if get_full_tree:
         all_paths, all_angles = inOrderHelper2D(root_node, goal_state)
-        return all_paths, total_odes
+        return all_paths, all_angles, total_odes
     else:
         all_locs, all_angles = [], []
         for goal_node in goal_nodes:
-            locs = path_from_parent(goal_node)
+            locs, angles = path_from_parent(goal_node)
             all_locs.append(locs)
-    return all_locs, total_odes
+            all_angles.append(angles)
+    return all_locs, all_angles, total_odes
 
 
 def cost_fn2d(state, neighbors, goal_state, step):
     x = state[0]
     y = state[1]
-    return np.abs(x - goal_state[0]) + 2 * np.abs(y - goal_state[1])
+    return np.abs(x - goal_state[0]) + np.abs(y - goal_state[1])
 
 def terrain_func(x, y):
     if x >= 1 and x <= 3 and y >= 0 and y <= 1:
@@ -501,7 +504,8 @@ def main():
     initial_state.z = 1.1
     initial_state.zf = initial_state.z - robot.constants.L
     initial_apex = initial_state.getArray()
-    goal = [5, 0, 0, 0]
+    goal = [1, 1, 0, 0]
+    cost_fn = cost_fn2d
     paths, odes = angleAstar2Dof(robot, initial_apex, goal, 12, 
                            3, cost_fn, terrain_func, terrain_normal_func,
                            friction, get_full_tree = False)

@@ -112,7 +112,6 @@ def plotHiddens(hidden_state):
 def stepVectorToMatrix(step_vector, rows, cols):
     return step_vector.reshape((rows, cols))
 
-
 # returns x,y in meters
 def softmaxMatrixToXY(matrix, max_x, max_y, disc):
     vec = matrix.reshape((1, -1))
@@ -129,8 +128,8 @@ def oneHotEncodeSequences2D(sequences, max_x, max_y, disc):
         seq_oh = []
         for pos in sequence:
             arr = np.zeros((int(max_y/disc), int(max_x/disc)))
-            x = np.clip(int(pos[0]/disc), 0, max_x/disc)
-            y = np.clip(int(pos[1]/disc), 0, max_y/disc)
+            x = np.clip(int(pos[0]/disc), 0, int(max_x/disc) - 1)
+            y = np.clip(int(pos[1]/disc), 0, int(max_y/disc) - 1)
             arr[y][x] = 1
             seq_oh.append(arr.tolist())
         output.append(seq_oh)

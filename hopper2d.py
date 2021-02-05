@@ -172,6 +172,7 @@ class Hopper2D:
 
     def checkStanceCollision(self, state, terrain_func, terrain_normal_func, friction):
         # check friction cone violation
+        # TODO: in the future, need to actually use terrain_normal_func, currently assuming it's np.pi/2
         hyp = np.sqrt(state.xhat**2 + state.yhat**2)
         angle = np.arctan(hyp/state.zhat)
         r_lim = np.arctan(friction)
@@ -184,7 +185,7 @@ class Hopper2D:
 
         tot_length = np.sqrt(state.xhat**2 + state.yhat**2 + state.zhat**2)
         # check spring bottoming out
-        if tot_length < self.constants.Lf - 0.05:
+        if tot_length < self.constants.Lf - 0.02:
             return sim_codes["SPRING_BOTTOM_OUT"]
 
         return sim_codes["SUCCESS"]
@@ -224,8 +225,13 @@ class Hopper2D:
 
             flight_states.append(state.getArray())
 
-            flat_check = (terrain_func(state.xf + 0.02, state.yf + 0.02) == terrain_func(state.xf, state.yf) and
-                    terrain_func(state.xf - 0.02, state.yf - 0.02) == terrain_func(state.xf, state.yf))
+            cur_ter_loc = terrain_func(state.xf, state.yf)
+            flat_check = (terrain_func(state.xf + 0.05, state.yf + 0.05) == cur_ter_loc and
+                    terrain_func(state.xf - 0.05, state.yf - 0.05) == cur_ter_loc and
+                    terrain_func(state.xf - 0.05, state.yf) == cur_ter_loc and
+                    terrain_func(state.xf + 0.05, state.yf) == cur_ter_loc and
+                    terrain_func(state.xf, state.yf - 0.05) == cur_ter_loc and
+                    terrain_func(state.xf, state.yf + 0.05) == cur_ter_loc)
 
             # This condition checks if the robot landed
             if hit_apex and state.zf <= terrain_func(state.xf, state.yf) and flat_check:
@@ -313,9 +319,13 @@ def generateTerrain2D(max_x, max_y, disc, ditch_info):
         x_disc = int(x/disc)
         y_disc = int(y/disc)
         if x < -1:
-            return 2
+            return -1 
         elif y < -1:
-            return 2
+            return -1
+        elif x > max_x + 1:
+            return 0
+        elif y > max_y + 1:
+            return 0
         elif x > max_x:
             return 0
         elif y > max_y:
@@ -328,7 +338,7 @@ def generateTerrain2D(max_x, max_y, disc, ditch_info):
 # disc is the length of one side of each square (discretized)
 def generateRandomTerrain2D(max_x, max_y, disc, num_ditches):
     # max width in any single dimension
-    max_width = 2
+    max_width = 4
     min_width = 1
     # y is rows, x is columns
     terrain_array = np.zeros((int(max_y/disc), int(max_x/disc)))

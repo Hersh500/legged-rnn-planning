@@ -80,16 +80,17 @@ def generateRandomSequences2D(robot,
                             cost_fn = astar_tree_search.stateCost,
                             full_tree = False,
                             progress = 0.5,
-                            seed = 42):
+                            until_x = 5,
+                            until_y = 5,
+                            disc = 0.1,
+                            seed = 42,
+                            path = './tmp/'):
   
   np.random.seed(seed)
   initial_states = []
   initial_terrains = []
   sequences = [] # list of lists of feasible steps
   final_apexes = []
-  until_x = 8
-  until_y = 4
-  disc = 0.25 
 
   max_z = 1.5
   min_z = 0.8
@@ -101,9 +102,10 @@ def generateRandomSequences2D(robot,
 
   terrain_arrays = []
   terrain_functions = []
+  max_num_ditches = min(6, num_terrains+1)
 
-  for num_ditches in range(1, 6):
-    for _ in range(num_terrains//5):
+  for num_ditches in range(1, max_num_ditches):
+    for _ in range(num_terrains//(max_num_ditches - 1)):
         terrain_array, terrain_func = hopper2d.generateRandomTerrain2D(until_x, until_y, disc, num_ditches)
         terrain_arrays.append(terrain_array)
         terrain_functions.append(terrain_func)
@@ -128,10 +130,10 @@ def generateRandomSequences2D(robot,
       success_count = 0
       num_tries = 0
       while success_count < num_astar_sequences and num_tries < max_tries:
-        step_sequences, count = astar_tree_search.angleAstar2Dof(robot,
+        step_sequences, angles, count = astar_tree_search.angleAstar2Dof(robot,
                                               initial_apex,
-                                              [8, 0, 0, 0],
-                                              12,
+                                              [until_x, until_y, 0, 0],
+                                              10,
                                               num_astar_sequences,
                                               cost_fn,
                                               terrain_functions[i],
@@ -139,9 +141,9 @@ def generateRandomSequences2D(robot,
                                               friction,
                                               get_full_tree = True)
         for l, ss in enumerate(step_sequences):
-          cond = len(ss) > min_steps and ss[-1][0] >= ss[0][0]
+          cond = len(ss) > min_steps and ss[-1][0] >= ss[0][0] and ss[-1][1] >= ss[0][1]
           for s in range(1, len(ss)):
-            cond = cond and (ss[s][0] > ss[s-1][0] - progress)
+            cond = cond and (ss[s][0] > ss[s-1][0] - progress) and (ss[s][1] > ss[s-1][1] - progress)
           if cond:
             success_count += 1
             # xdot, ydot, z height
@@ -150,9 +152,9 @@ def generateRandomSequences2D(robot,
             sequences.append(ss)
             initial_states.append(initial_condition)
         if success_count < num_astar_sequences:
-          step_sequences, count = astar_tree_search.angleAstar2Dof(robot,
+          step_sequences, angles, count = astar_tree_search.angleAstar2Dof(robot,
                                                  initial_apex,
-                                                 [8, 0, 0, 0],
+                                                 [until_x, until_y, 0, 0],
                                                  15,
                                                  num_astar_sequences,
                                                  cost_fn,
@@ -173,6 +175,11 @@ def generateRandomSequences2D(robot,
               initial_states.append(initial_condition)
           num_tries += 1
     print("finished terrain", i)
+
+  np.save(path + "terrains_" + str(seed), initial_terrains)
+  np.save(path + "sequences_" + str(seed), sequences)
+  np.save(path + "states_" + str(seed), initial_states)
+  print("saved files")
   return initial_states, initial_terrains, sequences
 
 
@@ -321,7 +328,8 @@ def generateHeuristicDataset(num_terrains, num_apexes, friction):
     return
 
 # Generates sequences from A* that is planned in the footstep space
-def generateRandomSequences2(num_terrains,
+def generateRandomSequences2(robot,
+                            num_terrains,
                             num_apexes,
                             num_astar_sequences,
                             friction,

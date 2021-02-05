@@ -203,19 +203,19 @@ class StepSequenceModelConv(nn.Module):
 def convOutputSize(width, height, ksize, padding, stride):
     out_width = (width - ksize + 2 * padding)/stride + 1
     out_height = (height - ksize + 2 * padding)/stride + 1
-    return out_width, out_height
+    return int(out_width), int(out_height)
 
 
 class StepSequenceModelConv2D(nn.Module):
-  def __init__(self, init_dim, in_width, in_height, in_size, 
+  def __init__(self, init_dim, in_width, in_height, input_size,
                hidden_dim, n_layers, ksize):
     super(StepSequenceModelConv2D, self).__init__()
 
     self.hidden_dim = hidden_dim
     self.n_layers = n_layers
-    self.using_lstm = use_lstm
     self.input_size = input_size
-    self.output_side = in_width * in_height
+    self.output_size = in_width * in_height
+    self.init_dim = init_dim
 
     # not actually used in the convolution kernel definition
     dilation = 1
@@ -227,21 +227,22 @@ class StepSequenceModelConv2D(nn.Module):
 
     linear_layer_input_size = out_width * out_height * num_layers2
     
-    if use_lstm:
-      self.rnn = nn.LSTM(input_size, hidden_dim, n_layers, batch_first = True)
+    self.rnn = nn.LSTM(input_size, hidden_dim, n_layers, batch_first = True)
+    '''
     else:
       self.rnn = nn.RNN(input_size, hidden_dim, n_layers, batch_first = True, 
                         nonlinearity = "tanh")
+    '''
     
-    self.init_net = nn.Sequential(nn.Linear(init_dim, hidden_dim),
+    self.init_net = nn.Sequential(nn.Linear(self.init_dim, self.hidden_dim),
                                   nn.Tanh())
 
     # the dimension of the output of this will be (1 x something...)
     self.conv_input = nn.Sequential(nn.Conv1d(2, 3, ksize),
                                     nn.ReLU(),
                                     nn.Conv1d(3, num_layers2, ksize))
-    self.input_fc = nn.Linear(linear_layer_input_size, input_size)
-    self.out_net = nn.Sequential(nn.Linear(hidden_dim, output_size))
+    self.input_fc = nn.Linear(linear_layer_input_size, self.input_size)
+    self.out_net = nn.Sequential(nn.Linear(self.hidden_dim, self.output_size))
 
   # x is (batch_size, seq_len, 2, y, x)
   def forward(self, x, init):
@@ -327,31 +328,42 @@ def evaluateConvModel(model, n, initial_apex, first_step, terrain_list, device, 
   return outs, softmaxes, hiddens
 
 
+
 '''
     Evaluate StepSequenceModelConv on a terrain + apex scenario
     TODO: beautify this code it looks disgusting
+    TODO: fix this
 '''
-def evaluateConvModel2D(model, n, initial_apex, first_step, terrain_array, device, T=1, max_x = 8, max_y = 4, disc = 0.25):
+def evaluateConvModel2D(model, n, initial_apex, first_step, terrain_array, device, T=1, max_x = 5, max_y = 5, disc = 0.1):
+  model = model.eval()
+  dim0 = terrain_array.shape[0]
+  dim1 = terrain_array.shape[1]
   datapoint = np.array([initial_apex[3], initial_apex[4], initial_apex[2]])
   init_state = torch.FloatTensor(datapoint).view(1, 1, -1).to(device)
-  prev_steps_oh = utils.oneHotEncodeSequences2D(first_step, max_x, max_y, disc)
-  prev_steps_oh = prev_steps_oh.reshape(1, 1, prev_steps_oh.shape[0], prev_steps_oh.shape[1])
-  inp = stackDataforConvNet(prev_steps_oh, terrain_array)
-  input = torch.from_numpy(inp).to(device)
+  prev_steps_oh = np.array(utils.oneHotEncodeSequences2D(first_step, max_x, max_y, disc))
+  prev_steps_oh = prev_steps_oh.reshape(1, prev_steps_oh.shape[1], prev_steps_oh.shape[2], prev_steps_oh.shape[3])
+  terrain_array = terrain_array.reshape(1, dim0, dim1)
+  torch_terrain = torch.from_numpy(terrain_array).float().to(device).view(1, 1, dim0, dim1)
+  inp = stackDataforConvNet2D(terrain_array, prev_steps_oh)
+  input = torch.from_numpy(inp).float().to(device)
   outs = []
   hiddens = []
   softmaxes = []
   for i in range(n):
     out, hidden = model(input, init_state)
-    out = out[:,-1].view(1, 1, -1)  # dividing by T is temperature scaling
-    outs.append(utils.softmaxToStep(out)[0][0].item())
+    out = out[:,-1].view(1, 1, dim0, dim1)  # dividing by T is temperature scaling
+    # outs.append(utils.softmaxToStep(out)[0][0].item())
     hiddens.append(hidden)
     out_processed = F.softmax(out, dim = 2)
-    softmaxes.append(F.softmax(out/T, dim = 2))
+    softmaxes.append(F.softmax(out/T, dim = 2).detach().cpu().numpy().reshape(dim0, dim1))
     out_and_terrain = torch.cat((torch_terrain, out_processed), dim = 1)
-    out_and_terrain = out_and_terrain.view(1 ,1, 2, -1)
+    out_and_terrain = out_and_terrain.view(1 ,1, 2, dim0, dim1)
     input = torch.cat((input, out_and_terrain.float()), dim=1)
+    out_mat = out.detach().cpu().numpy()
+    xy = utils.softmaxMatrixToXY(out_mat, max_x, max_y, disc)
+    outs.append(xy)
   return outs, softmaxes, hiddens
+
 
 
 '''

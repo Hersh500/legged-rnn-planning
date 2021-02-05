@@ -44,6 +44,32 @@ class RNNAStarPlanner:
 
 
 '''
+    2D Convolutional Recurrent planner; the input is a 2 layer thing of
+    the one-hot step and the terrain
+'''
+class ConvRNNPlanner2D:
+  def __init__(self, rnn_model, device, min_limit, T = 1, ve_dim = 0):
+    self.model = rnn_model
+    self.device = device
+    self.model = self.model.to(device)
+    self.T = T
+
+  def predict(self, n, initial_apex, terrain_matrix, first_steps, max_x=5, max_y=5, disc=0.1):
+    seq = first_steps 
+    outs, softmaxes, hiddens = models.evaluateConvModel2D(self.model,
+                                                          n,
+                                                          initial_apex,
+                                                          seq, 
+                                                          terrain_matrix, 
+                                                          self.device,
+                                                          T = self.T,
+                                                          max_x = max_x,
+                                                          max_y = max_y,
+                                                          disc = disc)
+    return outs, softmaxes
+
+
+'''
     Convolutional Recurrent planner; the input is a 2 layer thing of
     the one-hot step and the terrain
 '''
