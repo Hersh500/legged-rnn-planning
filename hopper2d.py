@@ -335,6 +335,10 @@ def generateTerrain2D(max_x, max_y, disc, ditch_info):
     return terrain_array, terrain_func
 
 
+def generateStepTerrain2D(max_x, max_y, disc, ditch_info):
+    return
+
+
 # disc is the length of one side of each square (discretized)
 def generateRandomTerrain2D(max_x, max_y, disc, num_ditches):
     # max width in any single dimension

@@ -48,13 +48,16 @@ class RNNAStarPlanner:
     the one-hot step and the terrain
 '''
 class ConvRNNPlanner2D:
-  def __init__(self, rnn_model, device, min_limit, T = 1, ve_dim = 0):
+  def __init__(self, rnn_model, device, max_x = 5, max_y = 5, disc = 0.1, T = 1, ve_dim = 0):
     self.model = rnn_model
     self.device = device
     self.model = self.model.to(device)
     self.T = T
+    self.max_x = max_x
+    self.max_y = max_y
+    self.disc = disc
 
-  def predict(self, n, initial_apex, terrain_matrix, first_steps, max_x=5, max_y=5, disc=0.1):
+  def predict(self, n, initial_apex, terrain_matrix, first_steps):
     seq = first_steps 
     outs, softmaxes, hiddens = models.evaluateConvModel2D(self.model,
                                                           n,
@@ -63,9 +66,9 @@ class ConvRNNPlanner2D:
                                                           terrain_matrix, 
                                                           self.device,
                                                           T = self.T,
-                                                          max_x = max_x,
-                                                          max_y = max_y,
-                                                          disc = disc)
+                                                          max_x = self.max_x,
+                                                          max_y = self.max_y,
+                                                          disc = self.disc)
     return outs, softmaxes
 
 

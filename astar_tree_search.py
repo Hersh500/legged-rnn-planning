@@ -288,6 +288,8 @@ def RNNGuidedAstar(robot,
   xstep_pred = x0_apex[0] + x0_apex[2] * time_till_ground
 
   cur_node.x_loc = (xstep_pred, xstep_pred)
+  if goal[0] >= x0_apex[0] + 8.0:
+    goal[0] = x0_apex[0] + 7.9
 
   while num_goal_nodes == 0 and iters < timeout:
     if debug:
@@ -306,7 +308,8 @@ def RNNGuidedAstar(robot,
     #   t_array.append(terrain_func(cur_node.x_loc + p))
 
     prev_steps = path_from_parent2(cur_node)
-    planning_apex = x0_apex[0:3]
+    # planning_apex = x0_apex[0:3]
+    planning_apex = [0, x0_apex[1], x0_apex[2]]
     t_array = []
     for p in pos:
       t_array.append(terrain_func(x0_apex[0] + p))
@@ -315,7 +318,7 @@ def RNNGuidedAstar(robot,
     distribution = softmaxes[-1].cpu().detach().numpy()[0][0]
     next_samples = discrete_sampling(distribution, num_samples, min = -3, max = 8)
     for sample in next_samples:
-      input = step_controller.calcAngle(sample, cur_apex[2], 0, 0, y = cur_apex[1])
+      input = step_controller.calcAngle(sample - cur_apex[0] + x0_apex[0], cur_apex[2], 0, 0, y = cur_apex[1])
       apex1, apex2, last_flight, count = hopper.getNextState2Count(robot,
                                                       cur_apex,
                                                       input,
@@ -327,7 +330,7 @@ def RNNGuidedAstar(robot,
       if apex1 is not None:
         # calculate the cost at last flight (right before landing)
         cost = cost_fn(last_flight, [], goal, step) + np.random.rand() * 1e-4
-        new_node = GraphNode((last_flight[0], cur_apex[0] + sample), 
+        new_node = GraphNode((last_flight[0], x0_apex[0] + sample), 
                              input, apex2, 
                              step, cost + cur_node.value, 
                              cur_node, [])
@@ -335,6 +338,7 @@ def RNNGuidedAstar(robot,
         cur_node.children.append(new_node)
         if debug:
           print("Sample step loc:", last_flight[0])
+          print("Lstep to hit that sample:", sample + x0_apex[0] - cur_apex[0])
           print("Sample cost:", cost)
         pq.put(tup)
     if pq.qsize() <= 0:
@@ -378,8 +382,10 @@ def sampleAngles2D(robot, num_samples_sqrt, cur_apex, terrain_func, terrain_norm
     return apexes, last_flights, angles, total_count 
 
 
-def atGoal(node, goal_state):
+def atGoal(node, goal_state, two_d = False):
     loc = node.x_loc
+    if two_d:
+        loc = node.x_loc[0]
     return loc[0] >= goal_state[0] and loc[1] >= goal_state[1]
 
 
@@ -477,6 +483,201 @@ def angleAstar2Dof(robot, x0_apex, goal_state, num_samples_sqrt,
             all_angles.append(angles)
     return all_locs, all_angles, total_odes
 
+
+def footSpaceAStar2D(robot, step_controller, x0_apex, goal_state, horizon, num_samples_sqrt,
+                     num_goal_des, cost_fn, terrain_func, terrain_normal_func,
+                     friction, get_full_tree = False):
+    pq = queue.PriorityQueue()
+    goal_nodes = []
+    num_goal_nodes = 0
+    iters = 0
+    timeout = 3000
+    step = 0
+    total_odes = 0
+
+    cur_node = GraphNode([x0_apex[0], x0_apex[1]], 0, x0_apex, 0, 0, None, [])
+    root_node = cur_node
+    deepest_node = cur_node
+    cur_apex = x0_apex
+    time_till_ground = 2 * (x0_apex[2] - robot.constants.L)/(-robot.constants.g)
+    xstep_pred = x0_apex[0] + x0_apex[3] * time_till_ground
+    ystep_pred = x0_apex[1] + x0_apex[4] * time_till_ground
+    cur_node.x_loc = [[xstep_pred, ystep_pred], []]
+
+    while num_goal_nodes < num_goal_des and iters < timeout:
+        next_xs = np.arange(cur_node.x_loc[0][1] - 1, cur_node.x_loc[0][1] + horizon, num_samples_sqrt)
+        next_ys = np.arange(cur_node.x_loc[0][1] - 1, cur_node.x_loc[0][1] + horizon, num_samples_sqrt)
+        xx, yy = np.meshgrid(next_xs, next_ys) 
+        xx, yy = xx.flatten(), yy.flatten()
+        total_count = 0
+        next_apexes = []
+        last_flights = []
+        angles = []
+        ctrlr_inputs = []
+        for i in range(len(xx)):
+            x_Lstep = xx - cur_node.x_loc[0][0]
+            y_Lstep = yy - cur_node.x_loc[0][1]
+            u = step_controller.calcAngle(x_Lstep, cur_apex[3], y_Lstep, cur_apex[4], cur_apex[2])
+            code, last_flight, next_apex, count = hopper2d.getNextApex2D(robot, cur_apex, u, terrain_func, terrain_normal_func,
+                                                                         friction, at_apex = True, return_count = True)
+            total_count += count
+            if code == 0:
+                last_flights.append(last_flight)
+                next_apexes.append(next_apex)
+                angles.append(u)
+                ctrlr_inputs.append([xx, yy])
+
+        for i in range(len(next_apexes)):
+            if i > 0 and i < len(angles) - 1:
+              neighbors = [last_flights[i-1], last_flights[i+1]]
+            elif len(angles) == 1:
+              neighbors = []
+            elif i == 0:
+              neighbors = [last_flights[i+1]]
+            else:
+              neighbors = [last_flights[i-1]]
+            
+            cost = cost_fn(last_flights[i], neighbors, goal_state, step) + np.random.randn() * 1e-4
+            node = GraphNode([[last_flights[i][0], last_flights[i][1]], ctrlr_inputs[i]], angles[i], next_apexes[i], step,
+                             cost + cur_node.value, cur_node, [])
+            cur_node.children.append(node)
+            pq.put((cost, node))
+
+        if pq.qsize() <= 0:
+            break
+        if pq.qsize() >= 10000:
+            break
+
+        cur_node = pq.get()[1]
+        if atGoal(cur_node, goal_state, two_d = True):
+            goal_nodes.append(cur_node) 
+            num_goal_nodes += 1
+            cur_node = pq.get()[1]
+        cur_apex = cur_node.apex
+        step = cur_node.step + 1
+        iters += 1
+
+    if num_goal_nodes == 0 and not get_full_tree:
+        # print("Couldn't find full path!")
+        return [], [], total_odes
+    
+    if get_full_tree:
+        all_paths, all_angles = inOrderHelper2D(root_node, goal_state)
+        for i in range(0, len(all_paths)):
+            all_paths[i] = [p[1] for p in all_paths[i]]  # select the controller input
+        return all_paths, all_angles, total_odes
+    else:
+        all_locs, all_angles = [], []
+        for goal_node in goal_nodes:
+            locs, angles = path_from_parent(goal_node)
+            locs = [l[1] for l in locs]  # select the controller input
+            all_locs.append(locs)
+            all_angles.append(angles)
+    return all_locs, all_angles, total_odes
+
+
+def discrete_sampling2D(distr, num_samples, disc):
+    choices = np.prod(distr.shape)
+    indices = np.random.choice(choices, size = num_samples, p = distr.ravel())
+    i_2d = np.column_stack(np.unravel_index(indices, shape = distr.shape))
+    # remember, y's are rows, x's are columns
+    i_2d[:,0] = i_2d[:,0]/disc
+    i_2d[:,1] = i_2d[:,1]/disc
+    return i_2d
+
+
+def RNNGuidedAStar2D(robot, step_controller, conv_rnn_planner, x0_apex, goal_state, num_samples,
+                     num_goal_des, cost_fn, terrain_func, terrain_normal_func,
+                     friction, get_full_tree = False):
+    pq = queue.PriorityQueue()
+    goal_nodes = []
+    num_goal_nodes = 0
+    iters = 0
+    timeout = 3000
+    step = 0
+    total_odes = 0
+
+    cur_node = GraphNode([x0_apex[0], x0_apex[1]], 0, x0_apex, 0, 0, None, [])
+    root_node = cur_node
+    deepest_node = cur_node
+    cur_apex = x0_apex
+    time_till_ground = 2 * (x0_apex[2] - robot.constants.L)/(-robot.constants.g)
+    xstep_pred = x0_apex[0] + x0_apex[3] * time_till_ground
+    ystep_pred = x0_apex[1] + x0_apex[4] * time_till_ground
+    cur_node.x_loc = [[xstep_pred, ystep_pred], []]
+
+    x_pos = np.arange(0, conv_rnn_planner.max_x, conv_rnn_planner.disc)
+    y_pos = np.arange(0, conv_rnn_planner.max_y, conv_rnn_planner.disc)
+    xx, yy = np.meshgrid(x_pos, y_pos)
+    # This initialization only works because x_pos shape = y_pos shape
+    t_array = np.zeros(xx.shape)
+    for i in range(t_array.shape[0]):
+      for j in range(t_array.shape[1]):
+        t_array[i][j] = terrain_func(xx[i][j], yy[i][j])
+
+    while num_goal_nodes < num_goal_des and iters < timeout:
+        ## RNN Changes this xx, yy ##
+        prev_steps = path_from_parent2(cur_node)        
+        outs, softmaxes = conv_rnn_planner.predict(1, cur_apex, t_array, [prev_steps])
+        distribution = softmaxes[-1]
+        next_samples = discrete_sampling2D(distribution, num_samples, conv_rnn_planner.disc)
+        #############################
+
+        total_count = 0
+        next_apexes = []
+        last_flights = []
+        angles = []
+        ctrlr_inputs = []
+        for i in range(len(next_samples)):
+            xx = next_samples[i][1]
+            yy = next_samples[i][0]
+
+            x_Lstep = xx - cur_node.x_loc[0][0]
+            y_Lstep = yy - cur_node.x_loc[0][1]
+            u = step_controller.calcAngle(x_Lstep, cur_apex[3], y_Lstep, cur_apex[4], cur_apex[2])
+            code, last_flight, next_apex, count = hopper2d.getNextApex2D(robot, cur_apex, u, terrain_func, terrain_normal_func,
+                                                                         friction, at_apex = True, return_count = True)
+            total_count += count
+            if code == 0:
+                last_flights.append(last_flight)
+                next_apexes.append(next_apex)
+                angles.append(u)
+                ctrlr_inputs.append([xx, yy])
+
+        for i in range(len(next_apexes)):
+            if i > 0 and i < len(angles) - 1:
+              neighbors = [last_flights[i-1], last_flights[i+1]]
+            elif len(angles) == 1:
+              neighbors = []
+            elif i == 0:
+              neighbors = [last_flights[i+1]]
+            else:
+              neighbors = [last_flights[i-1]]
+            
+            cost = cost_fn(last_flights[i], neighbors, goal_state, step) + np.random.randn() * 1e-4
+            node = GraphNode([[last_flights[i][0], last_flights[i][1]], ctrlr_inputs[i]], angles[i], next_apexes[i], step,
+                             cost + cur_node.value, cur_node, [])
+            cur_node.children.append(node)
+            pq.put((cost, node))
+
+        if pq.qsize() <= 0:
+            break
+        if pq.qsize() >= 10000:
+            break
+
+        cur_node = pq.get()[1]
+        if atGoal(cur_node, goal_state, two_d = True):
+            goal_nodes.append(cur_node) 
+            num_goal_nodes += 1
+            cur_node = pq.get()[1]
+        cur_apex = cur_node.apex
+        step = cur_node.step + 1
+        iters += 1
+
+    if num_goal_nodes == 0:
+        return path_from_parent2(deepest_node), total_odes
+    steps = path_from_parent2(goal_nodes[0])
+    return steps, total_odes
 
 def cost_fn2d(state, neighbors, goal_state, step):
     x = state[0]

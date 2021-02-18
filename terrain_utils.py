@@ -163,7 +163,7 @@ def generateStairsParams(num_steps = -1, until = 8, dict = 0.1):
   for i in range(num_steps):
     loc = np.random.rand() * 0.3 + prev_step_end  # allow small gaps..?
     width = np.random.rand() * 1.5
-    height = np.random.rand() * 0.7 + prev_step_height
+    height = np.random.rand() * 1.0 + prev_step_height
     prev_step_end = loc + width
     steps_dict[loc] = (height, width)
 

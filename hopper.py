@@ -556,7 +556,6 @@ def getNextState2Count(robot, x_flight, input_angle, terrain_func, terrain_norma
   last_stance_state = stance_states[len(stance_states) - 1]
   x_flight = robot.stanceToFlight(last_stance_state, foot_pos)
   
-  # simulate one more flight phase to check for collision (for robustness)
   code, flight_states, _ = robot.simulateOneFlightPhaseODE(None, 
                                                         x_init = x_flight,
                                                         debug = True,
@@ -569,8 +568,7 @@ def getNextState2Count(robot, x_flight, input_angle, terrain_func, terrain_norma
     return None, None, None, count
   for i in range (len(flight_states)-1):
     if flight_states[i+1][3] <= 0 and flight_states[i][3] >= 0:
-      apex_state = flight_states[i]
-      second_apex = apex_state
+      second_apex = flight_states[i]
       break
   return first_apex, second_apex, flight_states[-1], count
 

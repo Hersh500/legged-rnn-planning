@@ -205,8 +205,8 @@ def generateRandomSequences(robot,
   min_step = -3   # The farthest back we will consider.
   min_x = 0
   max_x = 2
-  min_y = 1.5
-  max_y = 0.8
+  min_y = 0.8 
+  max_y = 1.5
   min_x_dot = -1
   max_x_dot = 3
 
