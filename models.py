@@ -4,6 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 import utils
+from conv_lstm import ConvLSTM
 
 
 '''
@@ -206,6 +207,48 @@ def convOutputSize(width, height, ksize, padding, stride):
     return int(out_width), int(out_height)
 
 
+class StepSequenceModelConvLSTM2D(nn.Module):
+    def __init__(self, init_dim, in_width, in_height, kernel_size, num_filter, device):
+        super(StepSequenceModelConvLSTM2D, self).__init__()
+        self.init_dim = init_dim
+        self.in_width = in_width
+        self.in_height = in_height
+        self.kernel_size = kernel_size
+        self.device = device
+        self.num_filter = num_filter
+        self.output_size = in_width * in_height
+        self.b_h_w = (0, in_height//1, in_width//1)
+
+        self.lstm = ConvLSTM(2, self.num_filter, self.b_h_w, self.kernel_size, self.device, padding = kernel_size//2, stride = 1)
+        
+        self.hidden_dim = self.b_h_w[1] * self.b_h_w[2] * self.num_filter
+        self.init_net = nn.Sequential(nn.Linear(self.init_dim, self.hidden_dim))
+                                      
+        self.out_net = nn.Sequential(nn.Linear(self.hidden_dim, 512),
+                                     nn.Tanh(),
+                                     nn.Linear(512, self.output_size))
+        # self.out_net = nn.Sequential(nn.Conv2d(1, 1, 7, padding = 3))
+        
+        # General Architecture: give the stacked [terrain, step] as input to the lstm
+
+    # x is of shape (batch_size, seq_len, 2, y, x)
+    def forward(self, x, init):
+        init_h = self.init_net(init) 
+        init_c = self.init_net(init)
+        # init_h = init_h.view(x.size(0), 1, x.size(3), x.size(4))
+        # init_c = init_c.view(x.size(0), 1, x.size(3), x.size(4))
+        init_h = init_h.view(x.size(0), 1, self.b_h_w[1], self.b_h_w[2])
+        init_c = init_c.view(x.size(0), 1, self.b_h_w[1], self.b_h_w[2])
+        outputs, h = self.lstm(inputs = x, states = (init_h, init_c), seq_len = x.size(1))
+        # outputs is of the shape (seqs, batch_size, seq_len, y, x) ??
+        # outputs = outputs.view(outputs.size(0) * outputs.size(1), 1, self.in_height, self.in_width)
+        # outputs = self.out_net(outputs)
+        outputs = outputs.view(x.size(0), x.size(1), self.output_size)
+        # outputs = outputs.view(outputs.size(0), outputs.size(1), self.output_size)
+        return self.out_net(outputs), h 
+        # return outputs, h
+
+
 class StepSequenceModelConv2D(nn.Module):
   def __init__(self, init_dim, in_width, in_height, input_size,
                hidden_dim, n_layers, ksize):
@@ -219,6 +262,7 @@ class StepSequenceModelConv2D(nn.Module):
 
     # not actually used in the convolution kernel definition
     dilation = 1
+    stride = 4
     padding = 0
     
     num_layers2 = 3
@@ -351,15 +395,16 @@ def evaluateConvModel2D(model, n, initial_apex, first_step, terrain_array, devic
   softmaxes = []
   for i in range(n):
     out, hidden = model(input, init_state)
-    out = out[:,-1].view(1, 1, dim0, dim1)  # dividing by T is temperature scaling
-    # outs.append(utils.softmaxToStep(out)[0][0].item())
+    out = out[-1, -1].view(1, 1, dim0, dim1)  # dividing by T is temperature scaling
+    out_to_sm = out.view(dim0 * dim1)
     hiddens.append(hidden)
-    out_processed = F.softmax(out, dim = 2)
-    softmaxes.append(F.softmax(out/T, dim = 2).detach().cpu().numpy().reshape(dim0, dim1))
-    out_and_terrain = torch.cat((torch_terrain, out_processed), dim = 1)
+    out_processed = F.softmax(out_to_sm)
+    out_processed_t = F.softmax(out_to_sm/T)
+    softmaxes.append(out_processed_t.detach().cpu().numpy().reshape(dim0, dim1))
+    out_and_terrain = torch.cat((torch_terrain, out_processed.view(1, 1, dim0, dim1)), dim = 1)
     out_and_terrain = out_and_terrain.view(1 ,1, 2, dim0, dim1)
     input = torch.cat((input, out_and_terrain.float()), dim=1)
-    out_mat = out.detach().cpu().numpy()
+    out_mat = out.detach().cpu().numpy()[0][0]
     xy = utils.softmaxMatrixToXY(out_mat, max_x, max_y, disc)
     outs.append(xy)
   return outs, softmaxes, hiddens

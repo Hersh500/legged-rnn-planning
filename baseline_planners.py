@@ -131,3 +131,41 @@ class AStarPlanner2D:
             return step_sequences[0], angles[0], count
         else:
             return [], [], count
+
+class FootSpaceAStarPlanner2D:
+    def __init__(self, robot, step_controller, horizon, num_samples_sqrt, cost_matrix):
+        self.num_samples_sqrt = num_samples_sqrt
+        self.robot = robot
+        self.step_controller = step_controller
+        self.horizon = horizon
+        self.num_samples_sqrt = num_samples_sqrt
+
+        def costFn(x_flight, neighbors, goal, p):
+            x_pos = x_flight[0]
+            y_pos = x_flight[1]
+            
+            x_vel = x_flight[3]
+            y_vel = x_flight[4]
+
+            spread = 0
+            for n in range(len(neighbors)):
+                x_dist = (neighbors[n][0] - x_pos)**2
+                y_dist = (neighbors[n][1] - y_pos)**2
+                spread += np.sqrt(x_dist + y_dist)/len(neighbors)
+
+            return (np.sqrt(cost_matrix[0] * np.abs(x_pos - goal[0])**2 + cost_matrix[1] * np.abs(y_pos - goal[1])**2) +
+                   cost_matrix[2] * np.abs(x_vel - goal[2]) + cost_matrix[3] * np.abs(y_vel - goal[3])) + cost_matrix[4] * spread
+
+        self.cost_fn = costFn
+
+
+    def predict(self, initial_apex, terrain_func, friction, goal, use_fallback, timeout = 1000, debug = False):
+        steps, angles, odes = astar_tree_search.footSpaceAStar2D(self.robot, 
+                                                                self.step_controller,
+                                                                initial_apex, goal, self.horizon,
+                                                                self.num_samples_sqrt, 1, self.cost_fn,
+                                                                terrain_func, lambda x,y: np.pi/2, friction)
+        if len(steps) > 0:
+            return steps[0], angles[0], odes
+        else:
+            return [], [], odes

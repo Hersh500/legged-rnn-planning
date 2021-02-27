@@ -155,15 +155,15 @@ def generateIslandTerrains(num_terrains, until = 8, disc = 0.1):
 
 def generateStairsParams(num_steps = -1, until = 8, dict = 0.1):
   steps_dict = {}
-  prev_step_end = np.random.rand() * 2
+  prev_step_end = np.random.rand() * 2 + 0.5
   prev_step_height = 0
   if num_steps == -1:
     num_steps = int(np.random.rand() * 5)
 
   for i in range(num_steps):
     loc = np.random.rand() * 0.3 + prev_step_end  # allow small gaps..?
-    width = np.random.rand() * 1.5
-    height = np.random.rand() * 1.0 + prev_step_height
+    width = np.random.rand() * 1.5 + 0.5
+    height = np.random.rand() * 0.4
     prev_step_end = loc + width
     steps_dict[loc] = (height, width)
 

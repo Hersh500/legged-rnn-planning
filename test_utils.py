@@ -10,6 +10,7 @@ class TestMetrics:
                success_matrix = [],
                failure_cases = {},
                num_odes = 0, 
+               avg_time = 0,
                info = None):
     self.percent_success = percent_success
     self.mean_steps = mean_steps
@@ -17,6 +18,7 @@ class TestMetrics:
     self.failure_cases = failure_cases
     self.success_matrix = success_matrix
     self.num_odes = num_odes
+    self.avg_time = avg_time
     self.info = info
 
   def printMetrics(self):
@@ -31,6 +33,8 @@ class TestMetrics:
     print(self.failure_cases)
     print("Average number of ODE calls per success:")
     print(self.num_odes / (self.percent_success * len(self.success_matrix) * len(self.success_matrix[0])))
+    print("Average time to generate plan:")
+    print(self.avg_time)
     print("Success Matrix:")
     print(self.success_matrix)
 

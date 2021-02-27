@@ -108,8 +108,12 @@ class Hopper2D:
 
 
     def getFootPosFromAngles(self, state, u):
-        foot_x = state.x + self.constants.L * np.sin(u[0]) * np.cos(u[1])
-        foot_y = state.y + self.constants.L * np.sin(u[0]) * np.sin(u[1])
+        # foot_x = state.x + self.constants.L * np.sin(u[0]) * np.cos(u[1])
+        # foot_y = state.y + self.constants.L * np.sin(u[0]) * np.sin(u[1])
+        foot_x = state.x + self.constants.L * np.sin(u[0])
+        foot_y = state.y + self.constants.L * np.sin(u[1])
+        if self.constants.L**2 - (state.x - foot_x)**2 - (state.y - foot_y)**2 < 0:
+            print("less than zero error!")
         foot_z = state.z - np.sqrt(self.constants.L**2 - (state.x - foot_x)**2 - (state.y - foot_y)**2)  # Hack, since L, x, and y should determine z
         return foot_x, foot_y, foot_z
         
@@ -166,7 +170,7 @@ class Hopper2D:
     def checkFlightCollision(self, state, terrain_func):
         if state.z < terrain_func(state.x, state.y):
             return sim_codes["BODY_CRASH"]
-        if state.zf < terrain_func(state.xf, state.yf) - 0.05:
+        if state.zf < terrain_func(state.xf, state.yf) - 0.03:
             return sim_codes["FOOT_CRASH"]
         return sim_codes["SUCCESS"]
 
@@ -209,6 +213,12 @@ class Hopper2D:
 
         while integrator.successful():
             x = integrator.integrate(integrator.t + tstep)
+            if x is None:
+                print("None state!")
+            else:
+                for i in range(0, len(x)):
+                    if np.isnan(x[i]) or x[i] is None:
+                        print("none element!")
             prev_state = state
             state = FlightState2D(integrator.y)
             if state.zdot < 0 and prev_state.zdot >= 0:
@@ -221,6 +231,10 @@ class Hopper2D:
                 foot_x, foot_y, foot_z = self.getFootPosFromAngles(state, u)
                 state.xf = foot_x
                 state.yf = foot_y
+                if np.isnan(foot_z) or np.isnan(foot_x) or np.isnan(foot_y):
+                    print("GOt nan!")
+                    ret_val = sim_codes["FOOT_CRASH"]
+                    break
                 state.zf = foot_z
 
             flight_states.append(state.getArray())
@@ -241,6 +255,9 @@ class Hopper2D:
             ret_val = self.checkFlightCollision(state, terrain_func)
             if ret_val < 0:
                 break
+        if not integrator.successful():
+            print("unsuccessful integration!")
+            ret_val = sim_codes["BODY_CRASH"]
 
         return ret_val, flight_states, integrator.t
 
@@ -253,6 +270,12 @@ class Hopper2D:
         stance_states = [x0_stance]
         while integrator.successful():
             integrator.integrate(integrator.t + tstep)
+            if integrator.y is None:
+                print("None state!")
+            else:
+                for i in range(0, len(integrator.y)):
+                    if np.isnan(integrator.y[i]) or integrator.y[i] is None:
+                        print("none element!")
             stance_states.append(integrator.y)
             state = StanceState2D(integrator.y)
             length = state.xhat**2 + state.yhat**2 + state.zhat**2
@@ -318,38 +341,115 @@ def generateTerrain2D(max_x, max_y, disc, ditch_info):
     def terrain_func(x, y):
         x_disc = int(x/disc)
         y_disc = int(y/disc)
-        if x < -1:
-            return -1 
-        elif y < -1:
-            return -1
-        elif x > max_x + 1:
+        if x < -0.25:
+            return -2
+        elif y < -0.25:
+            return -2
+        elif y < 0:
             return 0
-        elif y > max_y + 1:
+        elif x < 0:
             return 0
-        elif x > max_x:
+        elif y > max_y + 0.25:
+            return -2
+        elif x >= max_x:
             return 0
-        elif y > max_y:
+        elif y >= max_y:
             return 0
         else:
             return terrain_array[y_disc][x_disc]
     return terrain_array, terrain_func
 
 
-def generateStepTerrain2D(max_x, max_y, disc, ditch_info):
-    return
+def generateStepTerrain2D(max_x, max_y, disc, step_info):
+    terrain_array = np.zeros((int(max_y/disc), int(max_x/disc)))
+    for step in step_info:
+        x_idx = int(step[0]/disc)
+        y_idx = int(step[1]/disc)
+        x_end = int((step[0] + step[2])/disc)
+        y_end = int((step[1] + step[3])/disc)
+        height = step[4]
+        terrain_array[y_idx:y_end, x_idx:x_end] = height
+    
+    def terrain_func(x, y):
+        x_disc = int(x/disc)
+        y_disc = int(y/disc)
+        if x < -1:
+            return -2
+        elif y < -0.25:
+            return -2 
+        elif y < 0:
+            return 0
+        elif x < 0:
+            return 0
+        elif y > max_y + 0.25:
+            return -2
+        elif x >= max_x:
+            return 0
+        elif y >= max_y:
+            return 0
+        else:
+            return terrain_array[y_disc][x_disc]
+    return terrain_array, terrain_func
+
+
+# disc is the length of one side of each square (discretized)
+def generateRandomStepTerrain2D(max_x, max_y, disc, num_steps):
+    # max width in any single dimension
+    max_width = 2
+    min_width = 1
+
+    max_height = 0.7
+    min_height = 0.1
+    # y is rows, x is columns
+    terrain_array = np.zeros((int(max_y/disc), int(max_x/disc)))
+    prev_step_end_x = 0
+    prev_step_end_y = 0
+    for _ in range(num_steps):
+        cur_step_x = np.random.rand() * (max_x - 1) + 1
+        cur_step_y = np.random.rand() * max_y
+        cur_step_x_width = np.random.rand() * (max_width - min_width) + min_width
+        cur_step_y_width = np.random.rand() * (max_width - min_width) + min_width
+        
+        prev_step_end_x = cur_step_x + cur_step_x_width
+        prev_step_end_y = cur_step_y + cur_step_y_width
+        x_start_idx, x_end_idx = int(cur_step_x/disc), int(prev_step_end_x/disc)
+        y_start_idx, y_end_idx = int(cur_step_y/disc), int(prev_step_end_y/disc)
+        terrain_array[y_start_idx:y_end_idx, x_start_idx:x_end_idx] = np.random.rand() * (max_height - min_height) + min_height
+    
+    def terrain_func(x, y):
+        x_disc = int(x/disc)
+        y_disc = int(y/disc)
+        if x < -1:
+            return -2
+        elif y < -0.25:
+            return -2
+        elif y < 0:
+            return 0
+        elif x < 0:
+            return 0
+        elif y > max_y + 0.25:
+            return -2
+        elif x >= max_x:
+            return 0
+        elif y >= max_y:
+            return 0
+        else:
+            return terrain_array[y_disc][x_disc]
+
+    return terrain_array, terrain_func
 
 
 # disc is the length of one side of each square (discretized)
 def generateRandomTerrain2D(max_x, max_y, disc, num_ditches):
     # max width in any single dimension
-    max_width = 4
-    min_width = 1
+    max_width = 2
+    min_width = 0.6
     # y is rows, x is columns
     terrain_array = np.zeros((int(max_y/disc), int(max_x/disc)))
     prev_ditch_end_x = 0
     prev_ditch_end_y = 0
     for _ in range(num_ditches):
-        cur_ditch_x = np.random.rand() * max_x + 1
+        cur_ditch_x = np.random.rand() * (max_x - 1) + 1
         cur_ditch_y = np.random.rand() * max_y
         cur_ditch_x_width = np.random.rand() * (max_width - min_width) + min_width
         cur_ditch_y_width = np.random.rand() * (max_width - min_width) + min_width
@@ -367,12 +467,18 @@ def generateRandomTerrain2D(max_x, max_y, disc, num_ditches):
         x_disc = int(x/disc)
         y_disc = int(y/disc)
         if x < -1:
-            return 2
-        elif y < -1:
-            return 2
-        elif x > max_x:
+            return -2
+        elif y < -0.25:
+            return -2
+        elif y > max_y + 0.25:
+            return -2
+        elif y < 0:
             return 0
-        elif y > max_y:
+        elif x < 0:
+            return 0
+        elif x >= max_x:
+            return 0
+        elif y >= max_y:
             return 0
         else:
             return terrain_array[y_disc][x_disc]
@@ -393,7 +499,7 @@ def main():
     x0_flight = state.getArray()
     terrain_func = lambda x,y: 0
     terrain_normal_func = lambda x,y: np.pi/2
-    u = [-5 * np.pi/180, 0]
+    u = [0, np.pi/20]
     print(u)
     code, flight_states, t_flight = robot.simulateOneFlightPhase(x0_flight,
                                                           u,
@@ -426,17 +532,21 @@ def main():
         print(state)
     '''
 
-    fig, axs = plt.subplots(2, 1)
+    fig, axs = plt.subplots(3, 1)
     zs = np.concatenate((np.array(flight_states)[:,2],
                          np.array(stance_states)[:,2],
                          np.array(flight_states2)[:,2]))
     xs = np.concatenate((np.array(flight_states)[:,0],
                          np.array(stance_states)[:,0] + np.array(stance_states)[:,-3],
                          np.array(flight_states2)[:,0]))
+    ys = np.concatenate((np.array(flight_states)[:,1],
+                         np.array(stance_states)[:,1] + np.array(stance_states)[:,-2],
+                         np.array(flight_states2)[:,1]))
 
     f_t = np.arange(0, t_flight + t_stance + t_flight2 + 0.01, 0.01)
     axs[0].scatter(f_t, xs[:f_t.shape[0]], color = "blue")
-    axs[1].scatter(f_t, zs[:f_t.shape[0]], color = "blue")
+    axs[1].scatter(f_t, ys[:f_t.shape[0]], color = "blue")
+    axs[2].scatter(f_t, zs[:f_t.shape[0]], color = "blue")
     plt.show()
 
 def main2():
@@ -447,4 +557,4 @@ def main2():
     plt.show()
      
 if __name__ == "__main__":
-    main2()
+    main()

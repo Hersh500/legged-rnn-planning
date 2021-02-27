@@ -21,8 +21,9 @@ def animateMovingXAxis(body_poses, foot_poses, anim_name = "animation.mp4", plan
         ax.clear()
         ax.set_ylim(-1, 1.5)
         x_minus = body_poses[i][0] - 1.0
-        x_plus = body_poses[i][0] + 1.0
-        ax.set_xlim(-0.5, 8)
+        x_plus = body_poses[i][0] + 6.0
+        # ax.set_xlim(-0.5, 8)
+        ax.set_xlim(x_minus, x_plus)
         ax.scatter(body_poses[i][0], body_poses[i][1], s=500, color="blue")
         ax.scatter(foot_poses[i][0], foot_poses[i][1], s=100, color="red")
         ax.plot([foot_poses[i][0], body_poses[i][0]], [foot_poses[i][1], body_poses[i][1]], color='blue')
@@ -31,7 +32,7 @@ def animateMovingXAxis(body_poses, foot_poses, anim_name = "animation.mp4", plan
         if nogo is not None:
             for point in nogo:
                 ax.plot(point, [0, 0], color='red')
-        plot_terrain(ax, x_minus=-0.9, x_plus = 8, terrain_func = terrain_func)
+        plot_terrain(ax, x_minus=-0.9, x_plus = x_plus, terrain_func = terrain_func)
         return
 
     sim = animation.FuncAnimation(fig, animFunc, frames=range(len(body_poses)))
@@ -50,16 +51,48 @@ def plotTerrainArrayAndSequence(terrain_array, sequence):
     return
 
 
-def plot_terrain(ax, x_minus, x_plus, terrain_func):
+def plot_terrain(ax, x_minus, x_plus, terrain_func, fill = False):
     segments = np.arange(start = x_minus, stop = x_plus + 0.1, step = 0.1)
     segments[segments.size - 1] = min(segments[segments.size - 1], x_plus)
     for i in range(0, segments.size - 1):
-        ax.plot([segments[i], segments[i+1]], [terrain_func(segments[i]), terrain_func(segments[i])], color = "black")
-        ax.plot([segments[i+1], segments[i+1]], [terrain_func(segments[i]), terrain_func(segments[i+1])], color = "black")
+        ax.plot([segments[i], segments[i+1]], [terrain_func(segments[i]), terrain_func(segments[i])], color = "gray")
+        ax.plot([segments[i+1], segments[i+1]], [terrain_func(segments[i]), terrain_func(segments[i+1])], color = "gray")
+        if fill:
+            ax.fill_between([-5, 0], [0, 0], -1, facecolor = "gray")
+            ax.fill_between([segments[i], segments[i+1]], [terrain_func(segments[i]), terrain_func(segments[i])], -1, facecolor = "gray")
+            ax.fill_between([segments[i+1], segments[i+1]], [terrain_func(segments[i]), terrain_func(segments[i+1])], -1, facecolor = "gray")
     return
 
 
-def plotStepsOverTerrainArray(prev_steps, terrain_array):
+def plotRobotWithArrow(ax, initial_apex, no_arrow = False, foot_pos = None):
+    ax.scatter(initial_apex[0], initial_apex[1], s=500, color = "blue")
+    if foot_pos is None:
+        foot_pos = (initial_apex[0], initial_apex[1] - 0.5)
+    ax.scatter(foot_pos[0], foot_pos[1], s = 100, color = "blue")
+    ax.plot([initial_apex[0], foot_pos[0]], [initial_apex[1], foot_pos[1]], color = "blue")
+      
+    # plot an arrow representing the robot's forward velocity
+    if not no_arrow:
+        ax.arrow(initial_apex[0], initial_apex[1], 0.5 * initial_apex[2], 0, head_width = 0.1, color = "black")
+    return
+
+def plotStepsAndRobotOverTerrainArray(ax, initial_apex, prev_steps, terrain_array, color = "red", plot_text = True):
+
+  plotRobotWithArrow(ax, initial_apex)
+  def terrain_func(x):
+    x_disc = int(x * 10)
+    return terrain_array[x_disc]
+
+  plot_terrain(ax, 0, 7.9, terrain_func, fill = True)
+  ys = [terrain_func(step) for step in prev_steps]
+  ax.scatter(prev_steps, ys, color=color)
+  if plot_text:
+    for i, step in enumerate(prev_steps):
+      ax.text(step, terrain_func(step) + 0.05, str(i+1))
+  return
+
+
+def plotStepsOverTerrainArray(prev_steps, terrain_array, color = "red"):
   def terrain_func(x):
     x_disc = int(x * 10)
     return terrain_array[x_disc]
@@ -68,10 +101,57 @@ def plotStepsOverTerrainArray(prev_steps, terrain_array):
   ax = plt.gca()
   plot_terrain(ax, 0, 7.9, terrain_func)
   ys = [terrain_func(step) for step in prev_steps]
-  ax.scatter(prev_steps, ys, color="red")
+  ax.scatter(prev_steps, ys, color=color)
   for i, step in enumerate(prev_steps):
     ax.text(step, terrain_func(step) + 0.05, str(i+1))
   plt.show()
+
+
+def plotManyProbabilitiesOverTerrain(prev_steps,
+                                 initial_apex,
+                                 softmax_probs,
+                                 terrain_func,
+                                 colors,
+                                 title_text = None,
+                                 fname = None,
+                                 outside_axis= None):
+  if outside_axis is None:
+    fig = plt.figure()
+    ax = plt.gca()
+  else:
+    ax = outside_axis
+
+  plot_terrain(ax, -3, 7.9, terrain_func, True)
+  pos_array = np.arange(-3, 8.0, 0.1)
+  ax.set_xlim(-1, 8)
+  ax.set_ylim(-0.75, 1.5)
+
+  # plot the distribution
+  for s, c in zip(softmax_probs, colors):
+    s_normed = s/(np.max(s))
+    ax.plot(pos_array, s_normed, color = c)
+
+  plotRobotWithArrow(ax, initial_apex)
+  '''
+  # plot the robot
+  ax.scatter(initial_apex[0], initial_apex[1], s=500, color = "blue")
+  ax.scatter(initial_apex[0], initial_apex[1] - 0.5, s = 100, color = "blue")
+  ax.plot([initial_apex[0], initial_apex[0]], [initial_apex[1], initial_apex[1] - 0.5], color = "blue")
+  '''
+
+  # plot the previous steps
+  ys = [terrain_func(step) for step in prev_steps]
+  ax.scatter(prev_steps, ys, color="red")
+  for i, step in enumerate(prev_steps):
+    ax.text(step, terrain_func(step) + 0.05, str(i+1))
+  if title_text is not None:
+    ax.set_title(title_text)
+  ax.set_xlabel("x(m)")
+  ax.set_ylabel("y(m)")
+  if fname is not None:
+    plt.savefig(fname)
+  if outside_axis is None:
+    plt.show()
 
 def plotProbabilitiesOverTerrain(prev_steps,
                                  initial_apex,
