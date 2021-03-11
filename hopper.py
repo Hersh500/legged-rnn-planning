@@ -33,78 +33,6 @@ def default_terrain_func(x):
     return 0
 
 '''
-Makes sure we are within friction cone bounds and spring hasn't bottomed-out.
-def checkStanceFailure(x_stance, foot_pos,
-                       terrain_func, terrain_normal_func=None,
-                       u=None, debug = True):
-  if x_stance[2] < constants.Lf - 0.05:
-    if debug:
-      print("Spring bottom-ed out:", x_stance[2])
-    return sim_codes["SPRING_BOTTOM_OUT"]
-  
-  if terrain_normal_func is not None and u is not None:
-    normal = terrain_normal_func(foot_pos[0])
-    forward_limit = normal - np.arctan(u)
-    rear_limit = normal + np.arctan(u)
-
-    if x_stance[0] < forward_limit:
-      if debug:
-        print("Forward Friction cone violation!: leg_angle", x_stance[0], "limit = ", forward_limit)
-      return sim_codes["FRICTION_CONE"]
-    if x_stance[0] > rear_limit:
-      if debug:
-        print("Rear Friction cone violation!: leg_angle", x_stance[0], "limit = ", rear_limit)
-      return sim_codes["FRICTION_CONE"]
-
-  body_pos = getBodyXYInStance(x_stance, foot_pos)
-  
-  # This indicates a collision with a wall
-  if terrain_func(body_pos[0]) > body_pos[1]:
-    if debug:
-      print("Collision with wall in stance! Body y", body_pos[1], " < terrain y", terrain_func(body_pos[0]))
-    return sim_codes["BODY_CRASH"]
-  return sim_codes["SUCCESS"]
-'''
-
-'''
-Checks if the body or foot collides with any terrain features
-- terrain_func is a function that maps x coord to y coord
-def checkFlightCollision(x_flight, terrain_func, debug = False):
-  body_x = x_flight[0]
-  body_y = x_flight[1]
-  foot_pos = getFootXYInFlight(x_flight)
-  if terrain_func(body_x) > body_y:
-    if debug:
-      print("body collision in flight phase!")
-      print("For body y = ", body_y, "terrain y", terrain_func(body_x))
-    return sim_codes["BODY_CRASH"]
-  elif terrain_func(foot_pos[0]) > foot_pos[1] + 0.05:
-    if debug:
-      print("foot collision in flight phase! x = ", foot_pos[0], "y = ", foot_pos[1])
-    return sim_codes["FOOT_CRASH"]
-  return sim_codes["SUCCESS"]
-'''
-
-'''
-def getFootXYInFlight(x_flight):
-    a = x_flight[5]
-    body_x = x_flight[0]
-    body_y = x_flight[1]
-    foot_x = body_x - np.cos(a) * constants.L
-    foot_y = body_y - np.sin(a) * constants.L
-    return [foot_x, foot_y]
-
-
-def getBodyXYInStance(x_stance, foot_pos):
-    a = x_stance[0]
-    Lb = x_stance[2]
-
-    x_b = foot_pos[0] + np.cos(a) * Lb
-    y_b = foot_pos[1] + np.sin(a) * Lb
-    return [x_b, y_b]
-'''
-
-'''
 flight state vector:
  x[0]: CoM x (m)
  x[1]: CoM y (m)
@@ -123,13 +51,6 @@ def flightStep(x, u, tstep):
     x_next = [com_x_next, com_y_next, x_vel_next, y_vel_next, w_next, foot_angle_next]
     return x_next
 
-'''
-def flightDynamics(t, x):
-    derivs = [x[2], x[3], 0, 0, 0, 0]
-    derivs[2] = 0
-    derivs[3] = constants.g
-    return derivs
-'''
 
 # calculates leg angle as a function of the current flight state and desired CoM velocity
 def legAnglePControl(x_flight, x_vel_des, k, Kp, tst = 0.18):
@@ -140,149 +61,6 @@ def legAnglePControl(x_flight, x_vel_des, k, Kp, tst = 0.18):
     leg_angle = np.arccos(leg_fd/constants.L)
 
     return leg_angle
-
-
-'''
-stance state vector:
-    a: the angle between the leg and the positive x axis
-    a_d: the angular velocity of the leg
-    Lb: the length of the leg
-    Lb_d: the derivative of the length of the leg
-# Currently assuming flat ground. Needs to be reworked for mixed terrain.
-# Returns actual second derivatives, not the state at the second timestep.
-# This is because a closed form solution for the dynamics doesn't exist.
-def stanceDynamics(t, x):
-    a = x[0]
-    a_d = x[1]
-    Lb = x[2]
-    Lb_d = x[3]
-
-    derivs = [a_d, 0, Lb_d, 0]
-    a_dd = (-2 * Lb_d * a_d - np.abs(constants.g) * np.cos(a))/Lb
-    Lb_dd = -constants.k/constants.m * (Lb - constants.Lf - constants.Lk0) - np.abs(constants.g) * np.sin(a) + Lb*(a_d**2)
-    derivs[1] = a_dd
-    derivs[3] = Lb_dd
-    return derivs
-'''
-'''
-# converts final flight state into initial stance state upon touchdown
-# Also need to save the foot position, since it is assumed stationary during stance phase
-def flightToStance(x):
-    Lb_init = constants.L
-    # x_diff = x[0] - foot_pos[0]
-    # y_diff = x[1] - foot_pos[1]
-    # Lb_init = np.sqrt(x_diff**2 + y_diff**2)
-    a_init = x[5]  
-    a_d_init = (-np.sin(a_init) * x[2] + np.cos(a_init) * x[3])/Lb_init
-    Lb_d_init = np.cos(a_init) * x[2] + np.sin(a_init) * x[3]
-    stance_vec = [a_init, a_d_init, Lb_init, Lb_d_init]
-    # print("converted stance energy", stancePhaseEnergy(stance_vec))
-    return stance_vec
-
-
-# converts final stance state to initial flight state on takeoff
-def stanceToFlight(x_stance, foot_pos):
-    # print("input stance energy", stancePhaseEnergy(x_stance))
-    xb = foot_pos[0] + np.cos(x_stance[0]) * x_stance[2]
-    yb = foot_pos[1] + np.sin(x_stance[0]) * x_stance[2]
-    xb_d = np.cos(x_stance[0]) * x_stance[3] - np.sin(x_stance[0]) * x_stance[1] * x_stance[2]
-    yb_d = np.sin(x_stance[0]) * x_stance[3] + np.cos(x_stance[0]) * x_stance[1] * x_stance[2]
-    flight_vec = [xb, yb, xb_d, yb_d, 0, x_stance[0]]
-    # print("converted flight energy:", flightPhaseEnergy(flight_vec))
-    return flight_vec
-
-
-def simulateOneFlightPhaseODE(x_stance, 
-                              foot_pos = None, 
-                              x_init = None, 
-                              debug = False, 
-                              u = np.pi/2, 
-                              tstep = 0.01, 
-                              terrain_func = default_terrain_func,
-                              till_apex = False,
-                              print_fails = True,
-                              hit_apex = False):
-    if debug:
-        x0_flight = x_init
-    else:
-        x0_flight = stanceToFlight(x_stance, foot_pos)
-
-    foot_angle_next = u
-
-    flight_states = [x0_flight]
-    integrator = ode(flightDynamics)
-    integrator.set_initial_value(x0_flight, 0)
-    ret_val = sim_codes["SUCCESS"]
-    cond = False
-    success = True
-    while integrator.successful():
-        x = integrator.integrate(integrator.t + tstep)
-        state = integrator.y
-        # ke = 0.5 * constants.m * (state[2]**2 + state[3]**2)
-        # pe = constants.m * np.abs(constants.g) * state[1]
-        # print("flight energy:", ke + pe)
-        if integrator.y[3] <= 0 and flight_states[len(flight_states)-1][3] >= 0:
-            hit_apex = True
-            if till_apex:
-              flight_states.append(integrator.y)
-              return sim_codes["SUCCESS"], flight_states, integrator.t
-
-        cur_state = integrator.y
-        if hit_apex:
-            cur_state[5] = foot_angle_next
-            cond = True
-
-        flight_states.append(cur_state)
-        foot_pos = getFootXYInFlight(cur_state)
-        if cond and foot_pos[1] <= terrain_func(foot_pos[0]):
-            if terrain_func(foot_pos[0] + 0.02) == terrain_func(foot_pos[0] - 0.02):
-                break
-        if np.abs(cur_state[1] - x0_flight[1]) > 0.05:
-            ret_val = checkFlightCollision(cur_state, terrain_func, debug = print_fails)
-        if ret_val < 0:  
-            break
-
-    return ret_val, flight_states, integrator.t
-'''
-
-def getStanceEnergy(x_stance):
-  stance_ke = (0.5 * x_stance[1]**2 * x_stance[2]**2 * constants.m + 
-              0.5 * x_stance[3]**2 * constants.m)
-  stance_pe = (0.5 * constants.k * (x_stance[2] - constants.Lf - constants.Lk0)**2 +
-               np.abs(constants.g) * np.sin(x_stance[0]) * (x_stance[2] * constants.m))
-  return stance_ke + stance_pe
-      
-'''  
-def simulateOneStancePhase(x_flight, tstep = 0.01, terrain_func = default_terrain_func, 
-                           print_fails = True, terrain_normal_func = None, friction = None):
-    x0_stance = flightToStance(x_flight)
-    # print("initial stance state:", x0_stance)
-    # print("initial stance energy:", getStanceEnergy(x0_stance))
-    foot_pos = getFootXYInFlight(x_flight)
-    integrator = ode(stanceDynamics)
-    integrator.set_initial_value(x0_stance, 0)
-    # backend = "dopri5"
-    # integrator.set_integrator(backend)
-    code = sim_codes["SUCCESS"]
-    stance_states = [x0_stance]
-    success = True
-    while integrator.successful():
-        integrator.integrate(integrator.t + tstep)
-        # print("stance energy:", getStanceEnergy(integrator.y))
-        stance_states.append(integrator.y)
-        if integrator.y[2] >= constants.L:
-          break
-        code = checkStanceFailure(integrator.y,
-                                  foot_pos,
-                                  terrain_func,
-                                  debug = print_fails,
-                                  terrain_normal_func = terrain_normal_func,
-                                  u = friction)
-        if code < 0:
-            break
-    return code, stance_states, integrator.t
-'''
-
 
 
 ### SIMULATION UTILITIES ###
@@ -488,7 +266,7 @@ class Hopper:
 
         return ret_val, flight_states, integrator.t
 
-# Higher level wrapper functions
+# Higher level wrapper functions that simulate multiple flight/stance phases
 def getNextState(hopper, x_flight, u, terrain_func):
     success, flight_states, _ = hopper.simulateOneFlightPhaseODE(None, 
                                                           x_init = x_flight,
