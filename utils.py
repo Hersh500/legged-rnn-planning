@@ -76,8 +76,8 @@ def plotRobotWithArrow(ax, initial_apex, no_arrow = False, foot_pos = None):
         ax.arrow(initial_apex[0], initial_apex[1], 0.5 * initial_apex[2], 0, head_width = 0.1, color = "black")
     return
 
-def plotStepsAndRobotOverTerrainArray(ax, initial_apex, prev_steps, terrain_array, color = "red", plot_text = True):
 
+def plotStepsAndRobotOverTerrainArray(ax, initial_apex, prev_steps, terrain_array, color = "red", plot_text = True):
   plotRobotWithArrow(ax, initial_apex)
   def terrain_func(x):
     x_disc = int(x * 10)
@@ -153,6 +153,7 @@ def plotManyProbabilitiesOverTerrain(prev_steps,
   if outside_axis is None:
     plt.show()
 
+
 def plotProbabilitiesOverTerrain(prev_steps,
                                  initial_apex,
                                  softmax_probs,
@@ -181,11 +182,11 @@ def plotProbabilitiesOverTerrain(prev_steps,
     ax.set_title(title_text)
   plt.show()
 
+
 def plotHiddens(hidden_state):
   fig = plt.figure()
   ax = fig.gca()
   ax.plot(hidden_state)
-
 
 
 ### DATA UTILITIES ###

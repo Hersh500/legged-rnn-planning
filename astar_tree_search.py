@@ -61,8 +61,6 @@ def sampleLegAngles(robot, x_apex, goal, step, terrain_func, terrain_normal_func
   # this is the limit of how far backward the leg can be placed behind body
   max_limit = np.pi/2 + np.arctan(friction)
 
-  # For now, just uniformly sampling angles between forward and rear limit.
-  # Later, we can choose a more intelligent sampling approach.
   angles = []
   costs = []
   apexes = []
@@ -70,16 +68,18 @@ def sampleLegAngles(robot, x_apex, goal, step, terrain_func, terrain_normal_func
   last_flights = []
   total_count = 0
 
-  # try gaussian sampling around the neutral point
+  # Hardcoded stance time, not necessarily accurate
   mean = np.arccos(x_apex[2] * 0.18 / 2)
   cov = (max_limit - min_limit)/cov_factor
 
   if neutral_angle_normal:
+    # samples from a normal distr centered around the mean
     pos = np.random.randn(num_samples) * cov + mean
   else:
+    # deterministic gridding
     pos = np.linspace(min_limit, max_limit, num_samples)
-    # pos = np.random.rand(num_samples) * (max_limit - min_limit) + min_limit
     pos = sorted(pos)
+
   for i in range(len(pos)):
     apex1, apex2, last_flight, count = hopper.getNextState2Count(robot, 
                                                     x_apex,
@@ -113,7 +113,6 @@ def sampleLegAngles(robot, x_apex, goal, step, terrain_func, terrain_normal_func
   return angles, costs, apexes, locs, total_count
 
 
-# Performs an In-order traversal through the treeeeeeeee
 def inOrderHelper(root_node, goal):
   all_paths = []
   all_angles = []
@@ -196,8 +195,6 @@ def aStarHelper(robot, x0_apex, goal, num_goal_nodes,
   # now that the while loop has terminated, we can reconstruct the trajectory
   if len(goal_nodes) == 0:
     goal_nodes.append(deepest_node)
-  # else:
-    # print("A* found", len(goal_nodes), "goal nodes!")
 
   sequences = []
   inputs = []
@@ -226,8 +223,156 @@ def aStarHelper(robot, x0_apex, goal, num_goal_nodes,
       return sequences, inputs
 
 
-### RNN Guided A* Utilities ###
+# Step-space search
+def footSpaceAStar(robot, 
+                   x0_apex,
+                   goal,
+                   num_goals,
+                   step_controller,
+                   terrain_func,
+                   friction,
+                   horizon,
+                   spacing,
+                   cost_fn,
+                   get_full_tree = True,
+                   count_odes = False,
+                   timeout = 1000,
+                   debug = False):
+  # initialize all the shits
+  pq = queue.PriorityQueue()
+  nodes = []
+  goal_nodes = []
+  iters = 0
+  pos = np.arange(0, 8.0, 0.1)
+  terrain_normal_func = lambda x: np.pi/2
+  Ts = 0.17
+  Tf = 0.60
+  step = 0
+  total_odes = 0
 
+  cur_node = GraphNode((x0_apex[0], 0), 0, x0_apex, 0, 0, None, [])
+  root_node = cur_node
+  deepest_node = cur_node
+  cur_apex = x0_apex
+  time_till_ground = 2 * (x0_apex[1] - robot.constants.L)/(-robot.constants.g)
+  xstep_pred = x0_apex[0] + x0_apex[2] * time_till_ground
+
+  cur_node.x_loc = (xstep_pred, xstep_pred)
+  hit_goal = False
+  while len(goal_nodes) < num_goals and iters < timeout:
+    if debug:
+      print("----Iter", iters, "----")
+      print("cur node = ", cur_node.x_loc[0])
+    # print("cur node xvel = ", cur_apex[2])
+    # print("cur node height = ", cur_apex[1])
+    # print("-------------------------------")
+    if cur_node.x_loc[0] > deepest_node.x_loc[0]:
+      deepest_node = cur_node
+
+    # used to be 3
+    orig_samples = np.arange(cur_node.x_loc[0]-2, cur_node.x_loc[0] + horizon, spacing)
+    next_samples = []
+
+    # remove samples if they land in a ditch
+    for j in range(len(orig_samples)):
+      if terrain_func(orig_samples[j]) >= 0:
+        next_samples.append(orig_samples[j])
+
+    next_apexes = []
+    last_flights = []
+    samples = []
+    added = []
+    for sample in next_samples:
+      input = step_controller.calcAngle(sample-cur_apex[0], cur_apex[2], 0, 0, upper_lim = 3.0, lower_lim = 0.5, y = cur_apex[1])
+      apex1, apex2, last_flight, count = hopper.getNextState2Count(robot, cur_apex,
+                                                      input,
+                                                      terrain_func,
+                                                      terrain_normal_func,
+                                                      friction,
+                                                      at_apex = True)
+      foot_input = sample  # save the control input that got us here.
+      total_odes += count
+      if apex1 is not None:
+        next_apexes.append(apex2)
+        last_flights.append(last_flight)
+        samples.append(foot_input)
+        # print("last flight vs sample", last_flight[0], sample, "with calc angle = ", input)
+    for i in range(len(next_apexes)):
+      # calculate the cost at last flight (right before landing)
+      if i == 0:
+        neighbors = [last_flights[min(1, len(next_apexes) - 1)]]   
+      elif i == len(next_apexes) - 1:
+        neighbors = [last_flights[i-1]]
+      else:
+        neighbors = [last_flights[i-1], last_flights[i+1]]
+      cost = cost_fn(last_flights[i], neighbors, goal, step) + np.random.rand() * 1e-4
+      if debug:
+        print("sample next step loc:", last_flights[i][0])
+        print("sample controller input:", samples[i])
+        print("sample next step cost:", cost)
+        print("-")
+
+      # instead of noting the actual x loc, save the input to the controller
+      # was previously last_flights[i][0]
+      # print("last flight x:", last_flights[i][0], "; sample x:", samples[i])
+      new_node = GraphNode((last_flights[i][0], samples[i]),
+                           input, next_apexes[i],
+                           step, cost + cur_node.value, 
+                           cur_node, [])
+      added.append(last_flights[i][0])
+      if last_flights[i][0] > goal[0]:
+        hit_goal = True
+      # tup = (new_node.value, new_node)
+      tup = (cost, new_node)
+      cur_node.children.append(new_node)
+      pq.put(tup)
+    # print("added", added)
+    if pq.qsize() <= 0:
+      break
+    cur_node = pq.get()[1]
+    cur_apex = cur_node.apex
+    step = cur_node.step + 1
+    iters += 1
+    if cur_node.x_loc[0] > goal[0]:
+      goal_nodes.append(cur_node)
+
+  if iters >= timeout and len(goal_nodes) == 0:
+    print("timeout! deepest node = ", deepest_node.x_loc[0])
+  # print("Foot Space A* found", len(goal_nodes), "goal nodes")
+  if len(goal_nodes) == 0:
+    goal_nodes.append(deepest_node)
+  if get_full_tree:
+    all_paths, all_angles = inOrderHelper(root_node, goal[0])
+    if count_odes:
+      return all_paths, all_angles, total_odes
+    else:
+      return all_paths, all_angles
+  else:
+    sequences = []
+    actual_locs = []
+    inputs = []
+    for cur_node in goal_nodes:
+      traj = [cur_node.x_loc[1]]
+      loc_seq = [cur_node.x_loc[0]]
+      angles = [cur_node.prev_angle]
+      while cur_node.parent is not None:
+        cur_node = cur_node.parent
+        traj.append(cur_node.x_loc[1])
+        loc_seq.append(cur_node.x_loc[0])
+        angles.append(cur_node.prev_angle)
+      traj = list(reversed(traj))
+      angles = list(reversed(angles))
+      loc_seq = list(reversed(loc_seq))
+      sequences.append(traj)
+      actual_locs.append(loc_seq)
+      inputs.append(angles)
+    if count_odes:
+      return sequences, inputs, total_odes, actual_locs
+    else:
+      return sequences, inputs, actual_locs
+
+
+### RNN Guided A* Utilities ###
 def path_from_parent(node):
   steps = []
   angles = []

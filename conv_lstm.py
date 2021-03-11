@@ -1,6 +1,7 @@
 from torch import nn
 import torch
 
+# Modified version of https://github.com/Hzzone/Precipitation-Nowcasting/blob/master/nowcasting/models/convLSTM.py
 class ConvLSTM(nn.Module):
     def __init__(self, input_channel, num_filter, b_h_w, kernel_size, device, stride=1, padding=3):
         super().__init__()

@@ -94,3 +94,12 @@ def generateStepTestMatrix(step_profile, num_apexes, max_vel = 2.5):
   
   step_matrix = TestMatrix(terrain_arrays, initial_apexes, step_profile)
   return step_matrix
+
+
+##################
+# Parallels for 2D 
+##################
+
+def generateStepTestMatrix2D(step_profile, num_apexes, max_x_vel, max_y_vel, array_params):
+    return
+
