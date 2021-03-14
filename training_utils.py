@@ -111,6 +111,7 @@ def convRNNValidation(model_eval, test_seq_batches, test_iv_batches, device):
     batch_size = len(test_seq_batches[0])
     num_batches = len(test_seq_batches)
     test_loss = 0
+    criterion = nn.CrossEntropyLoss()
     for i, batch in enumerate(test_seq_batches):
         seqs = test_seq_batches[i]
         init_vals = test_iv_batches[i]
