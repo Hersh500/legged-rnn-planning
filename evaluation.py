@@ -1,6 +1,7 @@
 import numpy as np
 import hopper
 import test_utils
+import time
 
 def truncate(x, n):
     factor = 10**n

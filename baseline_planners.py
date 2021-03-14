@@ -103,7 +103,7 @@ class FootSpaceAStarPlanner:
 
     def predict(self, initial_apex, terrain_func, friction,
                 goal, use_fallback, timeout = 2000, debug = False):
-        step_sequences, angle_sequences, count, loc_seq = footSpaceAStar(robot,
+        step_sequences, angle_sequences, count, loc_seq = footSpaceAStar(self.robot,
                                                                 initial_apex,
                                                                 goal, 1,
                                                                 self.step_controller,
