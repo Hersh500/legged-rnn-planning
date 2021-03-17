@@ -397,7 +397,7 @@ def evaluateConvModel2D(model, n, initial_apex, first_step, terrain_array, devic
     out, hidden = model(input, init_state)
     out = out[-1, -1].view(1, 1, dim0, dim1)  # dividing by T is temperature scaling
     out_to_sm = out.view(dim0 * dim1)
-    hiddens.append(hidden)
+    hiddens.append(hidden[-1])
     out_processed = F.softmax(out_to_sm)
     out_processed_t = F.softmax(out_to_sm/T)
     softmaxes.append(out_processed_t.detach().cpu().numpy().reshape(dim0, dim1))
