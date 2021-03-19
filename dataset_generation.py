@@ -257,11 +257,19 @@ def generateRandomSequences(robot,
     terrain_arrays = island_arrs + stair_arrs
     terrain_functions = island_fns + stair_fns
 
-  random_initial_apexes = np.zeros((max(50, num_apexes), 6))
-  for a in range(random_initial_apexes.shape[0]):
-    random_initial_apexes[a] = np.array([0, np.random.rand() * (max_y - min_y) + min_y,
-                                np.random.rand() * (max_x_dot - min_x_dot) + min_x_dot,
-                                0, 0, np.pi/2])
+
+  # ensure even coverage:
+  num_all_apexes = 50
+  heights = np.linspace(min_y, max_y, int(np.sqrt(num_all_apexes)))
+  vels = np.linspace(min_x_dot, max_x_dot, int(np.sqrt(num_all_apexes)))
+  random_initial_apexes = np.zeros((max(int(np.sqrt(num_all_apexes))**2, num_apexes), 6))
+  h, v = np.meshgrid(heights, vels)
+  h, v = h.flatten(), v.flatten()
+  for a in range(len(v)):
+    # random_initial_apexes[a] = np.array([0, np.random.rand() * (max_y - min_y) + min_y,
+    #                            np.random.rand() * (max_x_dot - min_x_dot) + min_x_dot,
+    #                            0, 0, np.pi/2])
+    random_initial_apexes[a] = np.array([0, h[a], v[a], 0, 0, np.pi/2])
 
   max_tries = 4  # try $max_tries sequences before giving up.
   pos_array = np.arange(0, 8.0, 0.1)

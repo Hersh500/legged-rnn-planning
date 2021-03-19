@@ -234,7 +234,7 @@ def evaluateConvModel(model, n, initial_apex, first_step, terrain_list, device, 
     out, hidden = model(input, init_state)
     out = out[:,-1].view(1, 1, -1)  # dividing by T is temperature scaling
     outs.append(utils.softmaxToStep(out)[0][0].item()) # out isnt' softmaxed..but that's okay for taking the argmax.
-    hiddens.append(hidden)
+    hiddens.append(hidden[-1])
     out_processed = F.softmax(out, dim = 2)
     softmaxes.append(F.softmax(out/T, dim = 2))
     out_and_terrain = torch.cat((torch_terrain, out_processed), dim = 1)
