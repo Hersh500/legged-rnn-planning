@@ -13,13 +13,14 @@ from conv_lstm import ConvLSTM
 '''
 class StepSequenceModelConv(nn.Module):
   def __init__(self, init_dim, input_size, output_size, hidden_dim, n_layers,
-               use_lstm, ksize):
+               use_lstm, ksize, prob_output = False):
     super(StepSequenceModelConv, self).__init__()
 
     self.hidden_dim = hidden_dim
     self.n_layers = n_layers
     self.using_lstm = use_lstm
     self.input_size = input_size
+    self.prob_output = prob_output
 
     # not actually used in the convolution kernel definition
     dilation = 1
@@ -45,7 +46,10 @@ class StepSequenceModelConv(nn.Module):
                                     nn.Conv1d(3, num_layers2, ksize))
     self.input_fc = nn.Linear(linear_layer_input_size, input_size)
 
-    self.out_net = nn.Sequential(nn.Linear(hidden_dim, output_size))
+    if self.prob_output:
+        self.out_net = nn.Sequential(nn.Linear(hidden_dim + input_size, output_size))
+    else:
+        self.out_net = nn.Sequential(nn.Linear(hidden_dim, output_size))
 
   def forward(self, x, init):
     hiddens0 = self.init_net(init)
@@ -68,6 +72,9 @@ class StepSequenceModelConv(nn.Module):
     else:
       out, hidden = self.rnn(rnn_input, hiddens)
 
+    # Now, stack this with the interm
+    if self.prob_output:
+        out = torch.hstack(out, interm)
     out = self.out_net(out)
     return out, hidden
 
