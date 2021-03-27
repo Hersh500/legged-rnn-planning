@@ -40,10 +40,14 @@ class TestMetrics:
 
 
 class TestMatrix:
-  def __init__(self, arrays, apexes, profile = None):
+  def __init__(self, arrays, apexes, profile = None,
+               disc = None, max_x = None, max_y = None):
     self.arrays = arrays
     self.apexes = apexes
     self.terrain_profile = profile
+    self.disc = disc
+    self.max_x = max_x
+    self.max_y = max_y
   
   def getFunctions(self):
     funcs = []
@@ -51,6 +55,15 @@ class TestMatrix:
       funcs.append(terrain_utils.getTerrainFunc(t_arr, disc = 0.1, min_lim = 0))
     return funcs
     
+  # Use in the 2D case.
+  def getFunctions2D(self):
+    funcs = []
+    if self.disc = None or self.max_x is None or self.max_y is None:
+        print("error getting the functions!")
+        return []
+    for t_arr in self.arrays:
+      funcs.append(terrain_utils.getTerrainFunc2D(t_arr, disc = self.disc, max_x = self.max_x, max_y = self.max_y))
+    return funcs
 
 def generateTestMatrix(ditch_profile, num_apexes, max_vel = 2.5):
   # first generate a bunch of initial apexes with increasing initial velocity
@@ -99,7 +112,53 @@ def generateStepTestMatrix(step_profile, num_apexes, max_vel = 2.5):
 ##################
 # Parallels for 2D 
 ##################
+def generateDitchTestMatrix2D(ditch_profile, num_apexes, max_x_vel, max_y_vel, array_params):
+    initial_apexes = []
+    arrays = []
+    max_x = array_params[0]
+    max_y = array_params[1]
+    disc = array_params[2]
+    x_vels = np.linspace(0, max_x_vel, num_apexes)
+    y_vels = np.random.rand(num_apexes) * (max_y_vel)
+    for i in range(num_apexes):
+        height = np.random.rand() * (1.5 - 0.9) + 0.9 
+        initial_apex = hopper2d.FlightState2D()
+        initial_apex.xdot = x_vels[i]
+        initial_apex.ydot = y_vels[i]
+        initial_apex.z = height
+        initial_apex.zf = height - hopper2d.Constants().L
+        initial_apexes.append(initial_apex.getArray()) 
+    
+    for num_ditches in ditch_profile:
+        array, func = hopper2d.generateRandomTerrain2D(max_x, max_y, disc, num_ditches)
+        arrays.append(array)
+    # need the extra params in the 2D case.
+    test_matrix = TestMatrix(arrays, initial_apexes, ditch_profile, disc = disc, max_x = max_x, max_y = max_y)
+    return test_matrix
 
-def generateStepTestMatrix2D(step_profile, num_apexes, max_x_vel, max_y_vel, array_params):
-    return
+
+def generateStepTestMatrix2D(ditch_profile, num_apexes, max_x_vel, max_y_vel, array_params):
+    initial_apexes = []
+    arrays = []
+    max_x = array_params[0]
+    max_y = array_params[1]
+    disc = array_params[2]
+    x_vels = np.linspace(0, max_x_vel, num_apexes)
+    y_vels = np.random.rand(num_apexes) * (max_y_vel)
+    for i in range(num_apexes):
+        height = np.random.rand() * (1.5 - 0.9) + 0.9 
+        initial_apex = hopper2d.FlightState2D()
+        initial_apex.xdot = x_vels[i]
+        initial_apex.ydot = y_vels[i]
+        initial_apex.z = height
+        initial_apex.zf = height - hopper2d.Constants().L
+        initial_apexes.append(initial_apex.getArray()) 
+    
+    for num_ditches in ditch_profile:
+        array, func = hopper2d.generateRandomStepTerrain2D(max_x, max_y, disc, num_ditches)
+        arrays.append(array)
+
+    # need the extra params in the 2D case.
+    test_matrix = TestMatrix(arrays, initial_apexes, ditch_profile, disc = disc, max_x = max_x, max_y = max_y)
+    return test_matrix
 

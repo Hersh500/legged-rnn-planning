@@ -237,9 +237,7 @@ def generateSingleFeatureTerrains(num_terrains, until = 8):
     return terrain_arrays, terrain_functions, terrain_locs, terrain_widths
 
 
-'''
-    Generate terrain function from array
-'''
+#    Generate terrain function from array
 def getTerrainFunc(t_array, disc = 0.1, min_lim = 0):
     def terrain_func(x):
         x_disc = int(x/disc + min_lim)
@@ -248,4 +246,26 @@ def getTerrainFunc(t_array, disc = 0.1, min_lim = 0):
         if x_disc >= len(t_array):
             return 0
         return t_array[x_disc]
+    return terrain_func
+
+def getTerrainFunc2D(t_array, disc, max_x, max_y):
+    def terrain_func(x, y):
+        x_disc = int(x/disc)
+        y_disc = int(y/disc)
+        if x < -1:
+            return -2
+        elif y < -0.25:
+            return -2 
+        elif y < 0:
+            return 0
+        elif x < 0:
+            return 0
+        elif y > max_y + 0.25:
+            return -2
+        elif x >= max_x:
+            return 0
+        elif y >= max_y:
+            return 0
+        else:
+            return t_array[y_disc][x_disc]
     return terrain_func
