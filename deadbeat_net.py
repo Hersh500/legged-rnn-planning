@@ -48,7 +48,7 @@ class PerturbedStepController:
         self.std = noise_std
         self.controller = base_controller
 
-    def calcAngle(self, Lstep, xdot, Ts, Tf, upper_lim = 2.0, lower_lim = 1.0, y = 1.0):
+    def calcAngle(self, Lstep, xdot, Ts, Tf, upper_lim = 2.5, lower_lim = 1.0, y = 1.0):
         noise = np.random.randn() * self.std
         return self.controller.calcAngle(Lstep, xdot, Ts, Tf, upper_lim, lower_lim, y) + noise
 

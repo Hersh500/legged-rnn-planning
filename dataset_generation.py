@@ -36,6 +36,7 @@ def processSeq(seq, buf, mov_amount, terrain_func):
             mod_seq.append(step)
     return mod_seq
 
+
 def generateNFeasibleSteps(robot, n,
                            initial_apex,
                            terrain_func,
@@ -85,6 +86,62 @@ def main():
     print(sequences)
 
     
+def generateTerrainDataset2D(num_terrains, until_x, until_y, disc):
+    min_num_ditches = 5
+    max_num_ditches = 9
+
+    min_num_steps = 5
+    max_num_steps = 9
+    all_terrains = np.zeros((num_terrains, int(until_y / disc), int(until_x / disc)))
+    for i in range(num_terrains//2):
+        num_ditches = np.random.randint(low = min_num_ditches, high = max_num_ditches)
+        terrain_array, _ = hopper2d.generateRandomTerrain2D(until_x,
+                                                            until_y,
+                                                            disc,
+                                                            num_ditches)
+        all_terrains[i] = terrain_array
+
+    for j in range(num_terrains//2):
+        num_steps = np.random.randint(low = min_num_steps, high = max_num_steps)
+        terrain_array, _ = hopper2d.generateRandomStepTerrain2D(until_x,
+                                                            until_y,
+                                                            disc,
+                                                            num_steps)
+        all_terrains[i+j] = terrain_array
+
+    return all_terrains
+
+
+def generateTerrainStepDataset2D(num_terrains, until_x, until_y, disc):
+    min_num_ditches = 5
+    max_num_ditches = 12
+
+    min_num_steps = 5
+    max_num_steps = 12
+    all_terrains = np.zeros((num_terrains, 2, int(until_y / disc), int(until_x / disc)))
+    for i in range(num_terrains//2):
+        num_ditches = np.random.randint(low = min_num_ditches, high = max_num_ditches)
+        terrain_array, _ = hopper2d.generateRandomTerrain2D(until_x,
+                                                            until_y,
+                                                            disc,
+                                                            num_ditches)
+        all_terrains[i][0] = terrain_array
+        x, y = np.random.randint(0, until_x//disc), np.random.randint(0, until_y//disc)
+        all_terrains[i][1][y][x] = 1
+
+    for j in range(num_terrains//2):
+        num_steps = np.random.randint(low = min_num_steps, high = max_num_steps)
+        terrain_array, _ = hopper2d.generateRandomStepTerrain2D(until_x,
+                                                            until_y,
+                                                            disc,
+                                                            num_steps)
+        all_terrains[i+j][0] = terrain_array
+        x, y = np.random.randint(0, until_x//disc), np.random.randint(0, until_y//disc)
+        all_terrains[i+j][1][y][x] = 1
+
+    return all_terrains
+
+
 def generateRandomSequences2D(robot,
                             num_terrains, 
                             num_apexes,
@@ -112,7 +169,7 @@ def generateRandomSequences2D(robot,
   min_z = 0.8
 
   min_x_dot = -0.5
-  max_x_dot = 3
+  max_x_dot = 2
   min_y_dot = -0.5
   max_y_dot = 2
 
@@ -124,7 +181,7 @@ def generateRandomSequences2D(robot,
     max_num_ditches = min(6, num_terrains//2+1)
     max_num_steps = min(6, num_terrains//2+1)
 
-  for num_ditches in range(1, max_num_ditches):
+  for num_ditches in range(3, 3 + max_num_ditches):
     if not only_ditch:
       for _ in range(num_terrains//(2 * (max_num_ditches - 1))):
         terrain_array, terrain_func = hopper2d.generateRandomTerrain2D(until_x, until_y, disc, num_ditches)
@@ -137,7 +194,7 @@ def generateRandomSequences2D(robot,
         terrain_functions.append(terrain_func)
 
   if not only_ditch:
-    for num_steps in range(1, max_num_steps):
+    for num_steps in range(3, 3 + max_num_steps):
       for _ in range(num_terrains//(2 * (max_num_steps - 1))):
         terrain_array, terrain_func = hopper2d.generateRandomStepTerrain2D(until_x, until_y, disc, num_steps)
         terrain_arrays.append(terrain_array)
@@ -155,7 +212,7 @@ def generateRandomSequences2D(robot,
     state_array = initial_state.getArray()
     random_initial_apexes[a] = np.array(state_array)
 
-  max_tries = 4
+  max_tries = 2
   for i in range(len(terrain_arrays)):
     this_arr = terrain_arrays[i].tolist()
     random_indices = (np.random.rand(num_apexes) * random_initial_apexes.shape[0]).astype(int)
@@ -174,7 +231,7 @@ def generateRandomSequences2D(robot,
                                               terrain_functions[i],
                                               lambda x,y:np.pi/2,
                                               friction,
-                                              get_full_tree = True)
+                                              get_full_tree = full_tree)
         for l, ss in enumerate(step_sequences):
           cond = len(ss) > min_steps and ss[-1][0] >= ss[0][0] and ss[-1][1] >= ss[0][1]
           for s in range(1, len(ss)):
@@ -196,7 +253,7 @@ def generateRandomSequences2D(robot,
                                                  terrain_functions[i],
                                                  lambda x,y:np.pi/2,
                                                  friction,
-                                                 get_full_tree = True)
+                                                 get_full_tree = full_tree)
           for l, ss in enumerate(step_sequences):
             cond = len(ss) > min_steps and ss[-1][0] >= ss[0][0]
             for s in range(1, len(ss)):

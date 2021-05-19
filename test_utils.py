@@ -1,5 +1,7 @@
 import terrain_utils
 import numpy as np
+import hopper2d
+import hopper
 
 
 ### TESTING CLASSES ###
@@ -32,7 +34,8 @@ class TestMetrics:
     print("Failure Cases:")
     print(self.failure_cases)
     print("Average number of ODE calls per success:")
-    print(self.num_odes / (self.percent_success * len(self.success_matrix) * len(self.success_matrix[0])))
+    if self.percent_success > 0:
+        print(self.num_odes / (self.percent_success * len(self.success_matrix) * len(self.success_matrix[0])))
     print("Average time to generate plan:")
     print(self.avg_time)
     print("Success Matrix:")
@@ -58,7 +61,7 @@ class TestMatrix:
   # Use in the 2D case.
   def getFunctions2D(self):
     funcs = []
-    if self.disc = None or self.max_x is None or self.max_y is None:
+    if self.disc is None or self.max_x is None or self.max_y is None:
         print("error getting the functions!")
         return []
     for t_arr in self.arrays:
@@ -125,8 +128,9 @@ def generateDitchTestMatrix2D(ditch_profile, num_apexes, max_x_vel, max_y_vel, a
         initial_apex = hopper2d.FlightState2D()
         initial_apex.xdot = x_vels[i]
         initial_apex.ydot = y_vels[i]
+        initial_apex.y = 2
         initial_apex.z = height
-        initial_apex.zf = height - hopper2d.Constants().L
+        initial_apex.zf = height - hopper.Constants().L
         initial_apexes.append(initial_apex.getArray()) 
     
     for num_ditches in ditch_profile:
@@ -150,8 +154,9 @@ def generateStepTestMatrix2D(ditch_profile, num_apexes, max_x_vel, max_y_vel, ar
         initial_apex = hopper2d.FlightState2D()
         initial_apex.xdot = x_vels[i]
         initial_apex.ydot = y_vels[i]
+        initial_apex.y = 2
         initial_apex.z = height
-        initial_apex.zf = height - hopper2d.Constants().L
+        initial_apex.zf = height - hopper.Constants().L
         initial_apexes.append(initial_apex.getArray()) 
     
     for num_ditches in ditch_profile:

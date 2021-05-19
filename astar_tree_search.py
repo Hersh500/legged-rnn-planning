@@ -2,6 +2,7 @@ import numpy as np
 import hopper
 import hopper2d
 import queue
+from scipy.spatial import KDTree
 
 # All of the astar utilities
 class GraphNode:
@@ -515,7 +516,6 @@ def RNNGuidedAstar(robot,
 
 ##### 2D Hopper Planning #####
 def sampleAnglesInCircle(num_samples_sqrt, friction):
-    '''
     thetas = []
     phis = []
     fric_range = np.linspace(0, friction, num_samples_sqrt)
@@ -524,7 +524,6 @@ def sampleAnglesInCircle(num_samples_sqrt, friction):
         phi_range = np.arcsin(np.sqrt(f - np.sin(theta_range)**2))
         thetas += list(theta_range)
         phis += list(phi_range)
-    '''
     thetas, phis = [], []
     while len(thetas) < num_samples_sqrt**2:
         theta = np.random.rand() * (2 * np.arctan(friction)) - np.arctan(friction)
@@ -533,6 +532,7 @@ def sampleAnglesInCircle(num_samples_sqrt, friction):
             thetas.append(theta)
             phis.append(phi)
     return thetas, phis
+
 
 def sampleAngles2D(robot, num_samples_sqrt, cur_apex, terrain_func, terrain_normal_func, friction):
     # pitch_angles = np.linspace(-np.arctan(friction), np.arctan(friction), num_samples_sqrt)
@@ -591,7 +591,7 @@ def angleAstar2Dof(robot, x0_apex, goal_state, num_samples_sqrt,
     goal_nodes = []
     num_goal_nodes = 0
     iters = 0
-    timeout = 3000
+    timeout = 500
     step = 0
     total_odes = 0
 
@@ -613,17 +613,19 @@ def angleAstar2Dof(robot, x0_apex, goal_state, num_samples_sqrt,
         # print("on node with apex", cur_node.apex[0:2], "step loc:", cur_node.x_loc)
         next_apexes, last_flights, angles, total_count = sampleAngles2D(robot, num_samples_sqrt, cur_apex, 
                                                                         terrain_func, terrain_normal_func, friction)
+        if len(last_flights) > 0:
+            tree = KDTree(np.array([[p[0], p[1]] for p in last_flights]))
         total_odes += total_count
         for i in range(len(next_apexes)):
-            if i > 0 and i < len(angles) - 1:
-              neighbors = [last_flights[i-1], last_flights[i+1]]
-            elif len(angles) == 1:
-              neighbors = []
-            elif i == 0:
-              neighbors = [last_flights[i+1]]
-            else:
-              neighbors = [last_flights[i-1]]
-            
+            dd, ii = tree.query([[last_flights[i][0], last_flights[i][1]]], k = 3)
+            neighbors = []
+            for neigh_idx in ii[0]:
+                try:
+                    neighbors.append([last_flights[neigh_idx][0], last_flights[neigh_idx][1]]) 
+                except IndexError:
+                    # print("Error; length of last_flights is", len(last_flights), "but neigh_idx = ", neigh_idx)
+                    pass
+
             cost = cost_fn(last_flights[i], neighbors, goal_state, step) + np.random.randn() * 1e-4
             # print("considering node with loc", [last_flights[i][0], last_flights[i][1]])
             node = GraphNode([last_flights[i][0], last_flights[i][1]], angles[i], next_apexes[i], step,

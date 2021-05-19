@@ -74,7 +74,9 @@ class StepSequenceModelConv(nn.Module):
 
     # Now, stack this with the interm
     if self.prob_output:
-        out = torch.hstack(out, interm)
+        print(out.shape)
+        print(interm.shape)
+        out = torch.hstack([out, interm])
     out = self.out_net(out)
     return out, hidden
 
@@ -238,7 +240,8 @@ def evaluateConvModel(model, n, initial_apex, first_step, terrain_list, device, 
   hiddens = []
   softmaxes = []
   for i in range(n):
-    out, hidden = model(input, init_state)
+    out, out_ps, hidden = model(input, init_state, True)
+    # out = out_ps
     out = out[:,-1].view(1, 1, -1)  # dividing by T is temperature scaling
     outs.append(utils.softmaxToStep(out)[0][0].item()) # out isnt' softmaxed..but that's okay for taking the argmax.
     hiddens.append(hidden[-1])
@@ -254,9 +257,10 @@ def evaluateConvModel(model, n, initial_apex, first_step, terrain_list, device, 
 '''
     Evaluate StepSequenceModelConv on a terrain + apex scenario
     TODO: beautify this code it looks disgusting
-    TODO: fix this
 '''
-def evaluateConvModel2D(model, n, initial_apex, first_step, terrain_array, device, T=1, max_x = 5, max_y = 5, disc = 0.1):
+def evaluateConvModel2D(model, n, initial_apex, first_step,
+                        terrain_array, device, T=1, max_x = 5,
+                        max_y = 5, disc = 0.1, get_pre_skip = False):
   model = model.eval()
   dim0 = terrain_array.shape[0]
   dim1 = terrain_array.shape[1]
@@ -272,12 +276,16 @@ def evaluateConvModel2D(model, n, initial_apex, first_step, terrain_array, devic
   hiddens = []
   softmaxes = []
   for i in range(n):
-    out, hidden = model(input, init_state)
+    if get_pre_skip:
+        out, out_ps, hidden = model(input, init_state, True)
+        out = out_ps 
+    else:
+        out, hidden = model(input, init_state)
     out = out[-1, -1].view(1, 1, dim0, dim1)  # dividing by T is temperature scaling
     out_to_sm = out.view(dim0 * dim1)
     hiddens.append(hidden[-1])
-    out_processed = F.softmax(out_to_sm)
-    out_processed_t = F.softmax(out_to_sm/T)
+    out_processed = F.softmax(out_to_sm, dim = 0)
+    out_processed_t = F.softmax(out_to_sm/T, dim = 0)
     softmaxes.append(out_processed_t.detach().cpu().numpy().reshape(dim0, dim1))
     out_and_terrain = torch.cat((torch_terrain, out_processed.view(1, 1, dim0, dim1)), dim = 1)
     out_and_terrain = out_and_terrain.view(1 ,1, 2, dim0, dim1)
