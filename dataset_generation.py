@@ -142,6 +142,34 @@ def generateTerrainStepDataset2D(num_terrains, until_x, until_y, disc):
     return all_terrains
 
 
+# terrain_params = [friction, max_x, max_y, disc]
+def generateCurricularDataset2D(robot,
+                                num_terrains_per,
+                                num_apexes_per,
+                                terrain_params,
+                                cost_fn,
+                                max_num_feats,
+                                seed = 42,
+                                path = "./tmp/"):
+    
+    sequences = []
+    terrains = []
+    initial_states = []
+    
+    friction = terrain_params[0]
+    max_x = terrain_params[1]
+    max_y = terrain_params[2]
+    disc = terrain_params[3]
+
+    for i in range(max_num_feats):
+        # generate a dataset with only this number of features
+        s, t, i_s = generateSequences(...)
+        sequences.append(s)
+        terrains.append(t)
+        initial_states.append(i_s) 
+    return sequences, terrains, initial_states
+
+
 def generateRandomSequences2D(robot,
                             num_terrains, 
                             num_apexes,
