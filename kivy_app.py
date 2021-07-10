@@ -24,6 +24,9 @@ class RootWidget(FloatLayout):
         self.in_stance = False
         self.robot_state = [0, 1.2, 0, 0, 0, np.pi/2]
         self.foot_pos = [0, 1.2 - self.constants.L]
+        self.terrain_func = lambda x: 0
+        self.vel_des = 0
+        self.cond = False
     
     def sim_to_plot(self, x, y):
         return x, y
@@ -32,15 +35,43 @@ class RootWidget(FloatLayout):
         self.robot_state = [0, 1.2, 0, 0, 0, np.pi/2]
         self.foot_pos = [0, 1.2 - self.constants.L]
         self.in_stance = False
+        self.vel_des = 0
+        self.cond = False
         return
     
     def update(self):
         if self.in_stance:
             # do the stance dynamics
+            derivs = np.array(self.robot.stanceDynamics(0, self.robot_state))
+            self.robot_state = list(np.array(self.robot_state) + dt * derivs)
+            if robot.checkStanceFailure(self.robot_state, self.foot_pos, self.terrain_func)
+                self.reset()
+            if self.robot_state[2] > self.robot.constants.L:
+                # convert to flight state  
+                self.robot_state = self.robot.stanceToFlight(self.robot_state, self.foot_pos)
+                self.in_stance = False
+                self.cond = False
         else:
             # do the flight dynamics
+            cur_y_vel = self.robot_state[3]
+            derivs = np.array(self.robot.flightDynamics(0, self.robot_state))
+            self.robot_state = list(np.array(self.robot_state) + dt * derivs)
+            # we have hit the apex
+            if self.robot_state <= 0 and cur_y_vel >= 0:
+                self.robot_state[5] = u
+                self.cond = True
+            self.foot_pos = self.robot.getFootXYInFlight(self.robot_state)
+            if self.cond and self.foot_pos[1] <= self.terrain_func(self.foot_pos[0]):
+                self.robot_state = self.robot.flightToStance(self.robot_state)
+                self.in_stance = True
+            if robot.checkFlightCollision(self.robot_state, self.terrain_func):
+                self.reset()
         return
 
+
+# the main loop should be:
+# read the slider, set vel_des
+# update the hopper state
 
 class MainApp(App):
 
