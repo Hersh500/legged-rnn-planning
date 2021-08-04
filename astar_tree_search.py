@@ -770,7 +770,7 @@ def discrete_sampling2D(distr, num_samples, disc):
 
 def RNNGuidedAStar2D(robot, step_controller, conv_rnn_planner, x0_apex, goal_state, num_samples,
                      num_goal_des, cost_fn, terrain_func, terrain_normal_func,
-                     friction, get_full_tree = False):
+                     friction, get_full_tree = False, sampling_method = "distribution"):
     pq = queue.PriorityQueue()
     goal_nodes = []
     num_goal_nodes = 0
@@ -786,7 +786,7 @@ def RNNGuidedAStar2D(robot, step_controller, conv_rnn_planner, x0_apex, goal_sta
     time_till_ground = 2 * (x0_apex[2] - robot.constants.L)/(-robot.constants.g)
     xstep_pred = x0_apex[0] + x0_apex[3] * time_till_ground
     ystep_pred = x0_apex[1] + x0_apex[4] * time_till_ground
-    cur_node.x_loc = [[xstep_pred, ystep_pred], []]
+    cur_node.x_loc = [[xstep_pred, ystep_pred], [xstep_pred, ystep_pred]]
 
     # Currently assumes x0_apex is 0
 
@@ -794,19 +794,30 @@ def RNNGuidedAStar2D(robot, step_controller, conv_rnn_planner, x0_apex, goal_sta
     y_pos = np.arange(-conv_rnn_planner.max_y//2, conv_rnn_planner.max_y//2, conv_rnn_planner.disc)
     xx, yy = np.meshgrid(x_pos, y_pos)
     # This initialization only works because x_pos shape = y_pos shape..?
-    t_array = np.zeros((int(conv_rnn_planner.max_y/rnn_planner.disc),
-                        int(conv_rnn_planner.max_x/rnn_planner.disc)))
+    t_array = np.zeros((int(conv_rnn_planner.max_y/conv_rnn_planner.disc),
+                        int(conv_rnn_planner.max_x/conv_rnn_planner.disc)))
     for i in range(t_array.shape[0]):
       for j in range(t_array.shape[1]):
         t_array[i][j] = terrain_func(xx[i][j] + x0_apex[0], yy[i][j] + x0_apex[1])
 
     while num_goal_nodes < num_goal_des and iters < timeout:
-        ## RNN Changes this xx, yy ##
-        prev_steps = path_from_parent2(cur_node)        
-        outs, softmaxes = conv_rnn_planner.predict(1, cur_apex, t_array, [prev_steps])
-        distribution = softmaxes[-1]
-        next_samples = discrete_sampling2D(distribution, num_samples, conv_rnn_planner.disc)
-        #############################
+        if sampling_method == "distribution":
+            ## RNN Changes this xx, yy ##
+            prev_steps = path_from_parent2(cur_node)   
+            outs, softmaxes = conv_rnn_planner.predict(1, cur_apex, t_array, [prev_steps])
+            distribution = softmaxes[-1]
+            next_samples = discrete_sampling2D(distribution, num_samples, conv_rnn_planner.disc)
+            #############################
+        elif sampling_method == "dropout":
+            prev_steps = path_from_parent2(cur_node)
+            next_samples = []
+            for _ in range(num_samples):
+                outs, hiddens = conv_rnn_planner.predict(1, cur_apex, t_array, [prev_steps])
+                next_samples.append(outs[-1])
+            print("Next samples:", next_samples)
+        else:
+            print("Error! Unrecognized sampling method")
+            return [], total_odes
 
         total_count = 0
         next_apexes = []
@@ -823,6 +834,7 @@ def RNNGuidedAStar2D(robot, step_controller, conv_rnn_planner, x0_apex, goal_sta
             code, last_flight, next_apex, count = hopper2d.getNextApex2D(robot, cur_apex, u, terrain_func, terrain_normal_func,
                                                                          friction, at_apex = True, return_count = True)
             total_count += count
+            print("tried sample", next_samples[i], "got code,", code)
             if code == 0:
                 last_flights.append(last_flight)
                 next_apexes.append(next_apex)

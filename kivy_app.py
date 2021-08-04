@@ -10,6 +10,7 @@ from kivy.graphics import Color, Rectangle, Ellipse, Line
 from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.button import Button
 import hopper
+import numpy as np
 
 dt = 0.01
 
@@ -28,6 +29,8 @@ class RootWidget(FloatLayout):
         self.vel_des = 0
         self.cond = False
     
+        self.robot_base = Ellipse(size = (10, 10), pos = (0, 0))
+
     def sim_to_plot(self, x, y):
         return x, y
 
@@ -44,7 +47,7 @@ class RootWidget(FloatLayout):
             # do the stance dynamics
             derivs = np.array(self.robot.stanceDynamics(0, self.robot_state))
             self.robot_state = list(np.array(self.robot_state) + dt * derivs)
-            if robot.checkStanceFailure(self.robot_state, self.foot_pos, self.terrain_func)
+            if robot.checkStanceFailure(self.robot_state, self.foot_pos, self.terrain_func):
                 self.reset()
             if self.robot_state[2] > self.robot.constants.L:
                 # convert to flight state  
@@ -79,9 +82,9 @@ class MainApp(App):
         self.root = root = RootWidget()
         root.bind(size=self._update_rect, pos=self._update_rect)
 
-        with root.canvas.before:
-            Color(0, 0, 0, 1)  # green; colors range from 0-1 not 0-255
-            self.rect = Rectangle(size=root.size, pos=root.pos)
+        with root.canvas:
+            Color(0.5, 0.5, 0.5, 1)  # green; colors range from 0-1 not 0-255
+            self.rect = Rectangle(size=(1, 1), pos=(0, 0))
         return root
 
     def _update_rect(self, instance, value):

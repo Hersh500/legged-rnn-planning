@@ -72,11 +72,12 @@ class ConvRNNPlanner:
 
 
 class RNNAStarPlanner2D:
-    def __init__(self, robot, rnn_planner, step_controller, num_samples, cost_matrix):
+    def __init__(self, robot, rnn_planner, step_controller, num_samples, cost_matrix, sampling_method):
         self.robot = robot
         self.rnn_planner = rnn_planner
         self.step_controller = step_controller
         self.num_samples = num_samples
+        self.sampling_method = sampling_method
         def costFn(x_flight, neighbors, goal, p):
             x_pos = x_flight[0]
             y_pos = x_flight[1]
@@ -104,7 +105,8 @@ class RNNAStarPlanner2D:
                                                          self.rnn_planner,
                                                          initial_apex, goal, self.num_samples,
                                                          1, self.cost_fn,
-                                                         terrain_func, lambda x,y: np.pi/2, friction)
+                                                         terrain_func, lambda x,y: np.pi/2, friction,
+                                                         sampling_method = self.sampling_method)
         if len(steps) > 0:
             return steps, [], odes
         else:

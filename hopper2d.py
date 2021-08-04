@@ -232,7 +232,7 @@ class Hopper2D:
                 state.xf = foot_x
                 state.yf = foot_y
                 if np.isnan(foot_z) or np.isnan(foot_x) or np.isnan(foot_y):
-                    print("GOt nan!")
+                    print("Got nan!")
                     ret_val = sim_codes["FOOT_CRASH"]
                     break
                 state.zf = foot_z

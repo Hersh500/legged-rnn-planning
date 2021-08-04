@@ -144,30 +144,151 @@ def generateTerrainStepDataset2D(num_terrains, until_x, until_y, disc):
 
 # terrain_params = [friction, max_x, max_y, disc]
 def generateCurricularDataset2D(robot,
-                                num_terrains_per,
-                                num_apexes_per,
+                                max_num_feats,
+                                terrain_schedule,
+                                apex_schedule,
                                 terrain_params,
                                 cost_fn,
-                                max_num_feats,
-                                seed = 42,
-                                path = "./tmp/"):
+                                seed = 42):
     
+    if len(terrain_schedule) != max_num_feats+1 or len(apex_schedule) != max_num_feats+1:
+        print("error! need terrain and apex schedule to have max_num_feats elements")
+        return [], [], []
+
+    np.random.seed(seed)
+    # these are 3d arrays: max_num_feats x sequences generated for each num feat
     sequences = []
     terrains = []
     initial_states = []
     
     friction = terrain_params[0]
-    max_x = terrain_params[1]
-    max_y = terrain_params[2]
+    until_x = terrain_params[1]
+    until_y = terrain_params[2]
     disc = terrain_params[3]
 
-    for i in range(max_num_feats):
-        # generate a dataset with only this number of features
-        s, t, i_s = generateSequences(...)
-        sequences.append(s)
-        terrains.append(t)
-        initial_states.append(i_s) 
+    max_x_dot = 3
+    min_x_dot = -1
+    max_y_dot = 2
+    min_y_dot = -1
+    max_z = 1.5
+    min_z = 0.8
+
+    # generate the initial_apexes 
+    random_initial_apexes = np.zeros((max(50, max(apex_schedule)), 13))
+    for a in range(random_initial_apexes.shape[0]):
+        initial_state = hopper2d.FlightState2D()
+        initial_state.xdot = np.random.rand() * (max_x_dot - min_x_dot) + min_x_dot
+        initial_state.ydot = np.random.rand() * (max_y_dot - min_y_dot) + min_y_dot
+        initial_state.z = np.random.rand() * (max_z - min_z) + min_z
+        initial_state.y = until_y//2
+        initial_state.zf = initial_state.z - robot.constants.L
+
+        state_array = initial_state.getArray()
+        random_initial_apexes[a] = np.array(state_array)
+
+    for i in range(max_num_feats+1):
+        # generate the terrains for this # features
+        terrain_arrays = []
+        terrain_funcs = []
+        for _ in range(terrain_schedule[i]//2):
+          terrain_array, terrain_func = hopper2d.generateRandomTerrain2D(until_x, until_y, disc, i)
+          terrain_arrays.append(terrain_array)
+          terrain_funcs.append(terrain_func)
+        for _ in range(terrain_schedule[i]//2):
+          terrain_array, terrain_func = hopper2d.generateRandomStepTerrain2D(until_x, until_y, disc, i)
+          terrain_arrays.append(terrain_array)
+          terrain_funcs.append(terrain_func)
+
+        feat_seqs = []
+        feat_terrains = []
+        feat_is = []
+        for j in range(terrain_schedule[i]):
+            terrain_func = terrain_funcs[j]
+            terrain_array = terrain_arrays[j]
+            for k in range(apex_schedule[i]):
+                index = np.random.choice(random_initial_apexes.shape[0])
+                initial_apex = random_initial_apexes[index]
+                s, t, i_s = generateSequencesForScenario(robot, terrain_func,
+                                                         terrain_array, initial_apex,
+                                                         friction, [until_x, until_y//2, 0, 0], cost_fn,
+                                                         1, False,
+                                                         0.0)
+                feat_seqs += s
+                feat_terrains += t
+                feat_is += i_s
+
+        sequences.append(feat_seqs) 
+        terrains.append(feat_terrains)
+        initial_states.append(feat_is)
+        print("finished",i,"feature terrains")
     return sequences, terrains, initial_states
+
+
+# breaking this out for use in generating the curricular dataset
+def generateSequencesForScenario(robot,
+                                terrain_func,
+                                terrain_array,
+                                initial_apex,
+                                friction,
+                                goal,
+                                cost_fn,
+                                num_astar_sequences,
+                                full_tree,
+                                progress,
+                                min_steps = 5):
+
+  sequences = []
+  initial_terrains = []
+  initial_states = [] 
+  success_count = 0
+  num_tries = 0
+  max_tries = 2
+  while success_count < num_astar_sequences and num_tries < max_tries:
+    step_sequences, angles, count = astar_tree_search.angleAstar2Dof(robot,
+                                                                  initial_apex,
+                                                                  goal,
+                                                                  15,
+                                                                  num_astar_sequences,
+                                                                  cost_fn,
+                                                                  terrain_func,
+                                                                  lambda x,y:np.pi/2,
+                                                                  friction,
+                                                                  get_full_tree = full_tree)
+    for l, ss in enumerate(step_sequences):
+      cond = len(ss) > min_steps and ss[-1][0] >= ss[0][0] and ss[-1][1] >= ss[0][1]
+      for s in range(1, len(ss)):
+        cond = cond and (ss[s][0] > ss[s-1][0] - progress) and (ss[s][1] > ss[s-1][1] - progress)
+      if cond:
+        success_count += 1
+        # xdot, ydot, z height
+        initial_condition = [initial_apex[3], initial_apex[4], initial_apex[2]]
+        initial_terrains.append(terrain_array)
+        sequences.append(ss)
+        initial_states.append(initial_condition)
+    if success_count < num_astar_sequences:
+      step_sequences, angles, count = astar_tree_search.angleAstar2Dof(robot,
+                                             initial_apex,
+                                             goal,
+                                             15,
+                                             num_astar_sequences,
+                                             cost_fn,
+                                             terrain_func,
+                                             lambda x,y:np.pi/2,
+                                             friction,
+                                             get_full_tree = full_tree)
+      for l, ss in enumerate(step_sequences):
+        cond = len(ss) > min_steps and ss[-1][0] >= ss[0][0]
+        for s in range(1, len(ss)):
+          cond = cond and (ss[s][0] > ss[s-1][0] - progress)
+        if cond:
+          success_count += 1
+          # xdot, ydot, z height
+          initial_condition = [initial_apex[3], initial_apex[4], initial_apex[2]]
+          initial_terrains.append(terrain_array)
+          sequences.append(ss)
+          initial_states.append(initial_condition)
+      num_tries += 1
+  return sequences, initial_terrains, initial_states
 
 
 def generateRandomSequences2D(robot,
@@ -209,6 +330,8 @@ def generateRandomSequences2D(robot,
     max_num_ditches = min(6, num_terrains//2+1)
     max_num_steps = min(6, num_terrains//2+1)
 
+
+  # Generate the training terrains
   for num_ditches in range(3, 3 + max_num_ditches):
     if not only_ditch:
       for _ in range(num_terrains//(2 * (max_num_ditches - 1))):
@@ -228,6 +351,7 @@ def generateRandomSequences2D(robot,
         terrain_arrays.append(terrain_array)
         terrain_functions.append(terrain_func)
 
+  # Generate the initial apexes
   random_initial_apexes = np.zeros((max(50, num_apexes), 13))
   for a in range(random_initial_apexes.shape[0]):
     initial_state = hopper2d.FlightState2D()
@@ -240,60 +364,26 @@ def generateRandomSequences2D(robot,
     state_array = initial_state.getArray()
     random_initial_apexes[a] = np.array(state_array)
 
+  # Actually generate the training sequenecs
   max_tries = 2
   for i in range(len(terrain_arrays)):
     this_arr = terrain_arrays[i].tolist()
     random_indices = (np.random.rand(num_apexes) * random_initial_apexes.shape[0]).astype(int)
     apexes = random_initial_apexes[random_indices]
     for initial_apex in apexes:
-      # print("seed:", seed, "trying apex:", initial_apex)
-      success_count = 0
-      num_tries = 0
-      while success_count < num_astar_sequences and num_tries < max_tries:
-        step_sequences, angles, count = astar_tree_search.angleAstar2Dof(robot,
-                                              initial_apex,
-                                              [until_x, until_y//2, 0, 0],
-                                              15,
-                                              num_astar_sequences,
-                                              cost_fn,
-                                              terrain_functions[i],
-                                              lambda x,y:np.pi/2,
-                                              friction,
-                                              get_full_tree = full_tree)
-        for l, ss in enumerate(step_sequences):
-          cond = len(ss) > min_steps and ss[-1][0] >= ss[0][0] and ss[-1][1] >= ss[0][1]
-          for s in range(1, len(ss)):
-            cond = cond and (ss[s][0] > ss[s-1][0] - progress) and (ss[s][1] > ss[s-1][1] - progress)
-          if cond:
-            success_count += 1
-            # xdot, ydot, z height
-            initial_condition = [initial_apex[3], initial_apex[4], initial_apex[2]]
-            initial_terrains.append(this_arr)
-            sequences.append(ss)
-            initial_states.append(initial_condition)
-        if success_count < num_astar_sequences:
-          step_sequences, angles, count = astar_tree_search.angleAstar2Dof(robot,
-                                                 initial_apex,
-                                                 [until_x, until_y//2, 0, 0],
-                                                 15,
-                                                 num_astar_sequences,
-                                                 cost_fn,
-                                                 terrain_functions[i],
-                                                 lambda x,y:np.pi/2,
-                                                 friction,
-                                                 get_full_tree = full_tree)
-          for l, ss in enumerate(step_sequences):
-            cond = len(ss) > min_steps and ss[-1][0] >= ss[0][0]
-            for s in range(1, len(ss)):
-              cond = cond and (ss[s][0] > ss[s-1][0] - progress)
-            if cond:
-              success_count += 1
-              # xdot, ydot, z height
-              initial_condition = [initial_apex[3], initial_apex[4], initial_apex[2]]
-              initial_terrains.append(this_arr)
-              sequences.append(ss)
-              initial_states.append(initial_condition)
-          num_tries += 1
+      s, t, i_s = generateSequencesForScenario(robot,
+                                            terrain_func,
+                                            terrain_array,
+                                            initial_apex,
+                                            friction,
+                                            [until_x, until_y//2,0,0],
+                                            cost_fn,
+                                            num_astar_sequences,
+                                            full_tree,
+                                            progress)
+      sequences += s
+      initial_terrains += t
+      initial_states += i_s
     print("finished terrain", i)
 
   np.save(path + "terrains_" + str(seed), initial_terrains)
