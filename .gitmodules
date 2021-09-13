@@ -1,0 +1,3 @@
+[submodule "geomloss"]
+	path = geomloss
+	url = https://github.com/jeanfeydy/geomloss.git

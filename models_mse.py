@@ -11,6 +11,8 @@ from sklearn.utils import shuffle
 import utils
 
 # Use this for models that don't use CE loss
+# TODO: is there a way to do this that also incorporates the idea of
+# doing this "in-image"?
 # TODO: need better file organization; this should be with the other models 
 
 # Only need terrain encoder

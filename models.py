@@ -240,7 +240,7 @@ def evaluateConvModel(model, n, initial_apex, first_step, terrain_list, device, 
   hiddens = []
   softmaxes = []
   for i in range(n):
-    out, out_ps, hidden = model(input, init_state, True)
+    out, out_ps, hidden = model(input, init_state)
     # out = out_ps
     out = out[:,-1].view(1, 1, -1)  # dividing by T is temperature scaling
     outs.append(utils.softmaxToStep(out)[0][0].item()) # out isnt' softmaxed..but that's okay for taking the argmax.

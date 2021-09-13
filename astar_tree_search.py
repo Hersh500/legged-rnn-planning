@@ -814,7 +814,7 @@ def RNNGuidedAStar2D(robot, step_controller, conv_rnn_planner, x0_apex, goal_sta
             for _ in range(num_samples):
                 outs, hiddens = conv_rnn_planner.predict(1, cur_apex, t_array, [prev_steps])
                 next_samples.append(outs[-1])
-            print("Next samples:", next_samples)
+            # print("Next samples:", next_samples)
         else:
             print("Error! Unrecognized sampling method")
             return [], total_odes
@@ -834,7 +834,7 @@ def RNNGuidedAStar2D(robot, step_controller, conv_rnn_planner, x0_apex, goal_sta
             code, last_flight, next_apex, count = hopper2d.getNextApex2D(robot, cur_apex, u, terrain_func, terrain_normal_func,
                                                                          friction, at_apex = True, return_count = True)
             total_count += count
-            print("tried sample", next_samples[i], "got code,", code)
+            # print("tried sample", next_samples[i], "got code,", code)
             if code == 0:
                 last_flights.append(last_flight)
                 next_apexes.append(next_apex)
