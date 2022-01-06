@@ -30,7 +30,7 @@ class FlightState2D:
         self.yf = array[11]
         self.zf = array[12]
 
-        # Unused for now
+        # Unused for now--eventually include the full dynamics
         self.pitch = array[6]
         self.roll = array[7]
         self.pitch_vel = array[8]
@@ -398,7 +398,7 @@ def generateRandomStepTerrain2D(max_x, max_y, disc, num_steps):
     max_width = 2
     min_width = 1
 
-    max_height = 0.7
+    max_height = 0.6
     min_height = 0.1
     # y is rows, x is columns
     terrain_array = np.zeros((int(max_y/disc), int(max_x/disc)))
@@ -436,6 +436,12 @@ def generateRandomStepTerrain2D(max_x, max_y, disc, num_steps):
         else:
             return terrain_array[y_disc][x_disc]
 
+    return terrain_array, terrain_func
+
+
+def generateGaps2D(max_x, max_y, disc, num_ditches, gap_lims = (0.1, 0.3)):
+    min_width = gap_lims[0]
+    max_width = gap_lims[1]
     return terrain_array, terrain_func
 
 

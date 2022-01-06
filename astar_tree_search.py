@@ -617,7 +617,7 @@ def angleAstar2Dof(robot, x0_apex, goal_state, num_samples_sqrt,
             tree = KDTree(np.array([[p[0], p[1]] for p in last_flights]))
         total_odes += total_count
         for i in range(len(next_apexes)):
-            dd, ii = tree.query([[last_flights[i][0], last_flights[i][1]]], k = 3)
+            dd, ii = tree.query([[last_flights[i][0], last_flights[i][1]]], k = 4)
             neighbors = []
             for neigh_idx in ii[0]:
                 try:
@@ -626,7 +626,7 @@ def angleAstar2Dof(robot, x0_apex, goal_state, num_samples_sqrt,
                     # print("Error; length of last_flights is", len(last_flights), "but neigh_idx = ", neigh_idx)
                     pass
 
-            cost = cost_fn(last_flights[i], neighbors, goal_state, step) + np.random.randn() * 1e-4
+            cost = cost_fn(last_flights[i], neighbors, cur_node.apex, goal_state, step) + np.random.randn() * 1e-4
             # print("considering node with loc", [last_flights[i][0], last_flights[i][1]])
             node = GraphNode([last_flights[i][0], last_flights[i][1]], angles[i], next_apexes[i], step,
                              cost + cur_node.value, cur_node, [])

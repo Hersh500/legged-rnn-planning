@@ -130,22 +130,25 @@ class AStarPlanner2D:
         self.fallback_samples = fallback_samples
         self.robot = robot
 
-        def costFn(x_flight, neighbors, goal, p):
+        def costFn(x_flight, neighbors, prev_flight, goal, p):
             x_pos = x_flight[0]
             y_pos = x_flight[1]
             
             x_vel = x_flight[3]
             y_vel = x_flight[4]
 
-            # Don't use spread for now.
+            last_x_vel = prev_flight[3]
+            last_y_vel = prev_flight[4]
+
             spread = 0
             for n in range(len(neighbors)):
                 x_dist = (neighbors[n][0] - x_pos)**2
                 y_dist = (neighbors[n][1] - y_pos)**2
                 spread += np.sqrt(x_dist + y_dist)/len(neighbors)
 
+            acc_term = np.sqrt((last_x_vel - x_vel)**2) + 0.5 * np.sqrt((last_y_vel - y_vel)**2)
             return (np.sqrt(cost_matrix[0] * np.abs(x_pos - goal[0])**2 + cost_matrix[1] * np.abs(y_pos - goal[1])**2) +
-                   cost_matrix[2] * np.abs(x_vel - goal[2]) + cost_matrix[3] * np.abs(y_vel - goal[3])) + cost_matrix[4] * spread
+                   cost_matrix[2] * np.abs(x_vel - goal[2]) + cost_matrix[3] * np.abs(y_vel - goal[3])) + cost_matrix[4] * spread + cost_matrix[5] * acc_term
 
         self.cost_fn = costFn
 

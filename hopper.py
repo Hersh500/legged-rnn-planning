@@ -19,6 +19,17 @@ class Constants:
         self.Cd = 0.5
         self.eps = 1e-2
 
+class CassieConstants:
+    def __init__(self):
+        self.L = 0.7  # length of leg in flight
+        self.Lf = 0.5 # length of unsprung part of leg
+        self.g = -9.8
+        self.m = 10 # kg
+        self.k = 4000  # seems like a decent approximation to Cassie's urdf? 
+        self.u = 1  # friction (material-dependent)
+        self.Lk0 = 0.2 # length of uncompressed spring
+        self.eps = 1e-2
+
 
 def sample_terrain_func(x):
     terrain_disc = {0:0, 0.3:0, 0.6:0.1, 0.9:0.2, 1.2:-0.5, 1.5:0.3, 1.8:0.3, 2.1:0.2, 2.4:0.3, 2.7: 0, 3.0: 0.2}

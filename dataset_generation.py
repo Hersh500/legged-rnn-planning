@@ -324,6 +324,7 @@ def generateRandomSequences2D(robot,
 
   terrain_arrays = []
   terrain_functions = []
+  # rework this: the number of features is too small, resulting in uninteresting trajs.
   if only_ditch:
     max_num_ditches = min(6, num_terrains+1)
   else:
@@ -331,8 +332,9 @@ def generateRandomSequences2D(robot,
     max_num_steps = min(6, num_terrains//2+1)
 
 
+  offset = 5
   # Generate the training terrains
-  for num_ditches in range(3, 3 + max_num_ditches):
+  for num_ditches in range(offset, offset + max_num_ditches):
     if not only_ditch:
       for _ in range(num_terrains//(2 * (max_num_ditches - 1))):
         terrain_array, terrain_func = hopper2d.generateRandomTerrain2D(until_x, until_y, disc, num_ditches)
@@ -345,7 +347,7 @@ def generateRandomSequences2D(robot,
         terrain_functions.append(terrain_func)
 
   if not only_ditch:
-    for num_steps in range(3, 3 + max_num_steps):
+    for num_steps in range(offset, offset + max_num_steps):
       for _ in range(num_terrains//(2 * (max_num_steps - 1))):
         terrain_array, terrain_func = hopper2d.generateRandomStepTerrain2D(until_x, until_y, disc, num_steps)
         terrain_arrays.append(terrain_array)
