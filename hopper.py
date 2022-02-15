@@ -19,12 +19,13 @@ class Constants:
         self.Cd = 0.5
         self.eps = 1e-2
 
+
 class CassieConstants:
     def __init__(self):
         self.L = 0.7  # length of leg in flight
         self.Lf = 0.5 # length of unsprung part of leg
         self.g = -9.8
-        self.m = 10 # kg
+        self.m = 10 # kg, torso mass
         self.k = 4000  # seems like a decent approximation to Cassie's urdf? 
         self.u = 1  # friction (material-dependent)
         self.Lk0 = 0.2 # length of uncompressed spring

@@ -6,6 +6,7 @@ from mpl_toolkits.mplot3d import Axes3D
 
 from hopper import sim_codes, sim_codes_rev
 import hopper
+import csv
 
 # State space of 1D hopper (simplified):
 # [x, y, xvel, yvel, pitch (unused), pitch_vel, leg_input_angle]
@@ -492,6 +493,18 @@ def generateRandomTerrain2D(max_x, max_y, disc, num_ditches):
     return terrain_array, terrain_func
 
 
+# Need to save actual heightmap, upper left corner, and discretization.
+def saveTerrainAsCSV(path, terrain_array, corner_value_m, disc_m, friction):
+    with open(path, 'w', newline="\n") as csvfile:
+        csvwriter = csv.writer(csvfile, delimiter=',')
+        for row in range(terrain_array.shape[0]):
+            csvwriter.writerow(terrain_array[row])
+        # delimiter and metadata
+        csvwriter.writerow(['-'])
+        csvwriter.writerow([disc_m, friction, corner_value_m[0], corner_value_m[1]])
+    return
+
+
 def main():
     robot = Hopper2D(hopper.Constants())
     state = FlightState2D()
@@ -561,6 +574,7 @@ def main2():
     ax = fig.add_subplot(111, projection='3d')
     plotTerrain2D(ax, terrain_array, 0.25)
     plt.show()
-     
+
 if __name__ == "__main__":
-    main()
+    terrain_array, terrain_func = generateTerrain2D(8, 4, 0.2, [[3, 0, 0.4, 4]])
+    saveTerrainAsCSV("test_terrain_save.csv", terrain_array, (0, 0), 0.2, 0.8)
