@@ -500,7 +500,7 @@ def saveTerrainAsCSV(path, terrain_array, corner_value_m, disc_m, friction):
         for row in range(terrain_array.shape[0]):
             csvwriter.writerow(terrain_array[row])
         # delimiter and metadata
-        csvwriter.writerow(['-'])
+        csvwriter.writerow(['D'])
         csvwriter.writerow([disc_m, friction, corner_value_m[0], corner_value_m[1]])
     return
 
