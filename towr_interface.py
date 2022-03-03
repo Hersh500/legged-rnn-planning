@@ -4,16 +4,15 @@ import subprocess as sp
 import argparse
 import yaml
 import csv
+import os
 
 import hopper2d
 
 
 class HeightMap:
-    def __init__(self, terrain_array, corner_val_m, disc, friction = 1.0):
+    def __init__(self, terrain_array, heightmap_info):
+        self.info = heightmap_info
         self.terrain_array = terrain_array
-        self.corner_val_m = corner_val_m
-        self.disc = disc
-        self.friction = friction
         return
 
     def plotSteps(self, step_sequence_m, lines = False):
@@ -42,15 +41,15 @@ class HeightMap:
 
     def m_to_idx(self, step):
         x_m, y_m = step
-        row_idx = np.clip(int((y_m - self.corner_val_m[1])/self.disc),
+        row_idx = np.clip(int((y_m - self.info["corner_val_m"][1])/self.info["disc"]),
                           0, self.terrain_array.shape[0])
-        col_idx = np.clip(int((x_m - self.corner_val_m[0])/self.disc),
+        col_idx = np.clip(int((x_m - self.info["corner_val_m"][0])/self.info["disc"]),
                           0, self.terrain_array.shape[1])
         return row_idx, col_idx
 
     def save(self, fname):
-        hopper2d.saveTerrainAsCSV(fname, self.terrain_array, self.corner_val_m,
-                                  self.disc, self.friction)
+        hopper2d.saveTerrainAsCSV(fname, self.terrain_array, self.info["corner_val_m"],
+                                  self.info["disc"], self.info["friction"])
 
 
 def randomDitchHeightMap(max_x, max_y, disc, num_ditches):
@@ -59,15 +58,6 @@ def randomDitchHeightMap(max_x, max_y, disc, num_ditches):
     terrain_array, terrain_func = hopper2d.generateRandomTerrain2D(max_x - x0, max_y - y0, disc, num_ditches) 
     return HeightMap(terrain_array, (x0, y0), disc)
 
-
-def gapHeightMap(max_x, max_y, disc, gap_info):
-    x0 = 0
-    y0 = -2
-    for gap in gap_info:
-        gap[0] -= x0
-        gap[1] -= y0
-    terrain_array, terrain_func = hopper2d.generateTerrain2D(max_x - x0, max_y - y0, disc, gap_info)
-    return HeightMap(terrain_array, (x0, y0), disc)
 
 def collateOutput(output_path):
     return
@@ -95,7 +85,10 @@ def runOneOptimization(config_lims, param_names, terrain_file):
     init_y_vel = opt_params["init_y_vel"]
     T = opt_params["T"]
     goal_x = opt_params["goal_x"]
-    
+
+    # Should add CoM height as a parameter as well.
+    initial_state = [init_x_vel, init_y_vel]
+
     args = ["--height_csv=" + terrain_file,
             "--num_steps=" + str(num_steps),
             "--initial_x_vel=" + str(init_x_vel),
@@ -113,22 +106,71 @@ def runOneOptimization(config_lims, param_names, terrain_file):
             reader = csv.reader(csvfile)
             for row in reader:
                 step_sequence.append([float(row[0]), float(row[1])])
-    return step_sequence
+    return step_sequence, initial_state
 
 
-def generateFullDataset():
-    return
+def gapHeightMap(heightmap_info, gap_xs, gap_widths):
+    x0 = heightmap_info["corner_val_m"][0]
+    y0 = heightmap_info["corner_val_m"][1]
+
+    gap_info =  [[gap_xs[i] - x0, 0, gap_widths[i], heightmap_info["max_y"] - y0] for i in range(len(gap_xs))]
+    terrain_array, terrain_func = hopper2d.generateTerrain2D(heightmap_info["max_x"] - x0, heightmap_info["max_y"] - y0,
+                                                             heightmap_info["disc"], gap_info)
+    return HeightMap(terrain_array, heightmap_info)
 
 
 # generate some random dataset with some gaps.
-def generateGapMaps(num_heightmaps, max_val_m, min_val_m, max_num_gaps, path):
-    num_each = num_heightmaps//(max_num_gaps + 1)
+# returns the number of heightmaps created.
+def generateGapMaps(num_heightmaps, max_num_gaps, heightmap_info, path):
+    if not os.path.exists(path):
+        os.mkdir(path)
+    num_each = num_heightmaps//(max_num_gaps+1)
     num_gaps = 0
     total_count = 0
+    min_island_size = 0.5
+    max_island_size = 1
     while num_gaps < max_num_gaps+1:
         for i in range(num_each):
-            # generate a heightmap with the prereq number of gaps
-            # save the heightmap as a csv in the folder marked by path
+            gap_xs = []
+            gap_widths = []
+            prev_x_end = 0.5
+            for _ in range(num_gaps):
+                gap_start = prev_x_end + np.random.uniform(min_island_size, max_island_size)
+                gap_xs.append(gap_start)
+                width = np.random.uniform(0.3, 0.5)
+                gap_widths.append(width) 
+                prev_x_end = gap_start + width
+            gapHeightMap(heightmap_info, gap_xs, gap_widths).save(os.path.join(path, str(total_count) + ".csv"))
+            total_count += 1
+        num_gaps += 1
+    return total_count
+
+
+def generateFullDataset(num_heightmaps, num_init_states, random_params, config_lims, terrains_folder, max_num_procs = 20):
+    if not os.path.isabs(terrains_folder):
+        terrains_folder = os.path.join(os.getcwd(), terrains_folder)
+
+    schedule = []
+    for i in range(num_heightmaps):
+        schedule += [i] * num_init_states 
+
+    counter = 0
+    all_terrains = []
+    all_initial_states = []
+    all_sequences = []
+    while counter < num_heightmaps:
+        terrains = schedule[counter:counter+max_num_procs]
+        all_params = [(config_lims, random_params, os.path.join(terrains_folder, str(t) + ".csv")) for t in terrains]
+        p = mp.Pool(processes = len(all_params))
+        return_val_array = p.starmap(runOneOptimization, all_params)
+        counter += max_num_procs
+        print(f"finished up to {counter}")
+        for i, arr in enumerate(return_val_array):
+            if len(arr[0]) > 0:
+                all_terrains.append(terrains[i])
+                all_initial_states.append(arr[1])
+                all_sequences.append(arr[0])
+    return all_sequences, all_initial_states, all_terrains
 
 
 def testHeightMapPlotting():
@@ -147,18 +189,13 @@ def main():
     config_fname = args.config
     with open(config_fname, 'r') as f:
         config = yaml.safe_load(f)
-    param_names = ["num_steps", "init_x_vel", "init_y_vel", "T", "goal_x"]
+    random_param_names = ["num_steps", "init_x_vel", "init_y_vel", "T", "goal_x"]
 
     # create a random ditch heightmap
-    disc = 0.1
-    num_ditches = 2
-    # hmap = randomDitchHeightMap(8, 2, disc, num_ditches)
-    hmap = gapHeightMap(8, 2, disc, [[1, -2, 0.4, 4], [1.5, -2, 0.2, 4]])
-    csvname = "gap_hmap_test.csv"
-    hmap.save(csvname)
+    hmap_info = config["hmap_info"]
+    num_maps_made = generateGapMaps(4, 1, hmap_info, "heightmaps")
+    all_sequences, all_states, all_terrains = generateFullDataset(num_maps_made, config["num_sequences"], random_param_names, config, "heightmaps", 10) 
 
-    seq = runOptimization(config, param_names, "/home/hersh/Programming/legged_planning/" + csvname)
-    hmap.plotSteps(seq, lines = True)
 
 
 if __name__ == "__main__":
