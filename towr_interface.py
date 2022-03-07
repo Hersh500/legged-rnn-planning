@@ -5,6 +5,7 @@ import argparse
 import yaml
 import csv
 import os
+import shutil
 
 import hopper2d
 
@@ -59,10 +60,6 @@ def randomDitchHeightMap(max_x, max_y, disc, num_ditches):
     return HeightMap(terrain_array, (x0, y0), disc)
 
 
-def collateOutput(output_path):
-    return
-
-
 def generateOptParams(lims, param_names):
     opt_params = {}
     for param in param_names:
@@ -76,9 +73,9 @@ def generateOptParams(lims, param_names):
 
 
 # this is the main function that will get called in the starmap
-def runOneOptimization(config_lims, param_names, terrain_file):
+def runOneOptimization(config_lims, param_names, terrain_file, ofname, seed):
+    np.random.seed(seed)
     opt_params = generateOptParams(config_lims, param_names)
-
     towr_path = config_lims["towr_path"]
     num_steps = opt_params["num_steps"]
     init_x_vel = opt_params["init_x_vel"]
@@ -94,15 +91,15 @@ def runOneOptimization(config_lims, param_names, terrain_file):
             "--initial_x_vel=" + str(init_x_vel),
             "--initial_y_vel=" + str(init_y_vel),
             "--T=" + str(T),
-            "--goal_x=" + str(goal_x)]
+            "--goal_x=" + str(goal_x),
+            "--ofname=" + str(ofname)]
 
     # run this in a blocking way
     val = sp.call([towr_path] + args)
     step_sequence = []
     if val == 0:
         # once you get the results, read the output csv and return the sequence, terrain, initial state
-        output_fname = terrain_file + "output" 
-        with open(output_fname) as csvfile:
+        with open(ofname) as csvfile:
             reader = csv.reader(csvfile)
             for row in reader:
                 step_sequence.append([float(row[0]), float(row[1])])
@@ -137,7 +134,7 @@ def generateGapMaps(num_heightmaps, max_num_gaps, heightmap_info, path):
             for _ in range(num_gaps):
                 gap_start = prev_x_end + np.random.uniform(min_island_size, max_island_size)
                 gap_xs.append(gap_start)
-                width = np.random.uniform(0.3, 0.5)
+                width = np.random.uniform(0.1, 0.3)
                 gap_widths.append(width) 
                 prev_x_end = gap_start + width
             gapHeightMap(heightmap_info, gap_xs, gap_widths).save(os.path.join(path, str(total_count) + ".csv"))
@@ -152,19 +149,19 @@ def generateFullDataset(num_heightmaps, num_init_states, random_params, config_l
 
     schedule = []
     for i in range(num_heightmaps):
-        schedule += [i] * num_init_states 
+        schedule += [i] * num_init_states
 
     counter = 0
     all_terrains = []
     all_initial_states = []
     all_sequences = []
-    while counter < num_heightmaps:
+    while counter < len(schedule):
         terrains = schedule[counter:counter+max_num_procs]
-        all_params = [(config_lims, random_params, os.path.join(terrains_folder, str(t) + ".csv")) for t in terrains]
+        all_params = [(config_lims, random_params, os.path.join(terrains_folder, str(t) + ".csv"), os.path.join(terrains_folder, str(t) + "_" + str(j) + "seq.csv"), np.random.randint(0, 1000)) for j,t in enumerate(terrains)]
         p = mp.Pool(processes = len(all_params))
         return_val_array = p.starmap(runOneOptimization, all_params)
         counter += max_num_procs
-        print(f"finished up to {counter}")
+        print(f"finished up to {counter}/{len(schedule)}")
         for i, arr in enumerate(return_val_array):
             if len(arr[0]) > 0:
                 all_terrains.append(terrains[i])
@@ -192,10 +189,19 @@ def main():
     random_param_names = ["num_steps", "init_x_vel", "init_y_vel", "T", "goal_x"]
 
     # create a random ditch heightmap
+    terrains_folder = "heightmaps"
     hmap_info = config["hmap_info"]
-    num_maps_made = generateGapMaps(4, 1, hmap_info, "heightmaps")
-    all_sequences, all_states, all_terrains = generateFullDataset(num_maps_made, config["num_sequences"], random_param_names, config, "heightmaps", 10) 
+    num_heightmaps = config["num_heightmaps"]
+    num_sequences = config["num_sequences"]
+    num_maps_made = generateGapMaps(num_heightmaps, 4, hmap_info, terrains_folder)
+    all_sequences, all_states, all_terrains = generateFullDataset(num_maps_made, num_sequences, random_param_names, config, "heightmaps", 15) 
+    print(f"made {len(all_sequences)} sequences")
 
+    np.save(os.path.join(terrains_folder, "all_sequences.npy"), all_sequences)
+    np.save(os.path.join(terrains_folder, "all_states.npy"), all_sequences)
+    np.save(os.path.join(terrains_folder, "all_terrains.npy"), all_sequences)
+    shutil.copyfile(config_fname, os.path.join(terrains_folder, "config.yaml"))
+    
 
 
 if __name__ == "__main__":
