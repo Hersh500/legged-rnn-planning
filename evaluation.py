@@ -10,7 +10,7 @@ def truncate(x, n):
 
 
 def simulateRecedingHorizonAStar(robot,
-                                 x0_apex, 
+                                 x0_apex,
                                  planner,
                                  step_controller,
                                  terrain_func,
@@ -20,7 +20,7 @@ def simulateRecedingHorizonAStar(robot,
                                  debug = False,
                                  prints = True,
                                  use_locs = False):
-  
+
   goal_x = 10
   body_poses = []
   foot_poses = []
@@ -49,7 +49,6 @@ def simulateRecedingHorizonAStar(robot,
                                                               debug=True,
                                                               terrain_func = terrain_func,
                                                               till_apex = True)
-    
 
     flight_body_poses = [[x[0], x[1]] for x in flight_states]
     flight_foot_poses = [robot.getFootXYInFlight(x) for x in flight_states]
@@ -79,9 +78,9 @@ def simulateRecedingHorizonAStar(robot,
       old_plan = replan
       need_to_replan = False
       start_time = time.time()
-      replan, angles, count = planner.predict(apex_state, 
+      replan, angles, count = planner.predict(apex_state,
                                              terrain_func,
-                                             friction, 
+                                             friction,
                                              goal = [max(goal_x, goal_x+4), 0],
                                              use_fallback = False,
                                              timeout = 2000,
@@ -94,8 +93,8 @@ def simulateRecedingHorizonAStar(robot,
       if len(replan) <= time_to_replan:
         if prints:
           print("A* failed to find long enough path first try!")
-        replan, angles, count = planner.predict(apex_state, 
-                                               terrain_func, 
+        replan, angles, count = planner.predict(apex_state,
+                                               terrain_func,
                                                friction,
                                                goal = [max(goal_x, goal_x+4), 0],
                                                use_fallback = True,
@@ -169,7 +168,7 @@ def simulateRecedingHorizonAStar(robot,
     code, stance_states, t_d = robot.simulateOneStancePhase(last_flight_state,
                                                           tstep=tstep,
                                                           terrain_func = terrain_func,
-                                                         terrain_normal_func = lambda x: np.pi/2, 
+                                                         terrain_normal_func = lambda x: np.pi/2,
                                                          friction = friction)
     stance_body_poses = [robot.getBodyXYInStance(x, stance_foot_pose) for x in stance_states]
     stance_foot_poses = [stance_foot_pose for x in stance_states]
@@ -269,7 +268,7 @@ def testSearchPlannerOnMatrix(robot, planner, step_controller, test_matrix, time
   return test_results
 
 
-def simulateRecedingHorizonRNN(robot, 
+def simulateRecedingHorizonRNN(robot,
                               x0_apex,
                               rnn_planner,
                               step_controller,
@@ -294,7 +293,7 @@ def simulateRecedingHorizonRNN(robot,
   t_array = []
   for p in pos:
     t_array.append(terrain_func(p))
-    
+
   initial_flight_state = x0_apex
   num_steps_hit = 0
   ttr = time_to_replan
@@ -310,7 +309,7 @@ def simulateRecedingHorizonRNN(robot,
                                                           debug=True,
                                                           terrain_func = terrain_func,
                                                           till_apex = True)
-    
+
 
     flight_body_poses = [[x[0], x[1]] for x in flight_states]
     flight_foot_poses = [robot.getFootXYInFlight(x) for x in flight_states]
@@ -391,7 +390,7 @@ def simulateRecedingHorizonRNN(robot,
     code, stance_states, t_d = robot.simulateOneStancePhase(last_flight_state,
                                                           tstep=tstep,
                                                           terrain_func = terrain_func,
-                                                         terrain_normal_func = lambda x: np.pi/2, 
+                                                         terrain_normal_func = lambda x: np.pi/2,
                                                          friction = friction)
     stance_body_poses = [robot.getBodyXYInStance(x, stance_foot_pose) for x in stance_states]
     stance_foot_poses = [stance_foot_pose for x in stance_states]
@@ -440,7 +439,7 @@ def testRNNPlannerOnMatrix(robot, rnn_planner, step_controller, test_matrix, tim
                                                                                       friction,
                                                                                       time_to_replan = time_to_replan,
                                                                                       tstep = tstep,
-                                                                                      prints = prints)  
+                                                                                      prints = prints)
       if code == 0:
         pct_success += 1
         success_matrix[i][j] = 1

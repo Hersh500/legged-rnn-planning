@@ -388,3 +388,7 @@ def createDataBatches2Dof(sequences, terrains, init_states, batch_size = 64, tra
   test_terrain_batches = terrain_shuf[int(train_pct * num_batches):]
 
   return train_seq_batches, train_terrain_batches, train_iv_batches, test_seq_batches, test_terrain_batches, test_iv_batches
+
+
+def nearest_power_of_two(x):
+    return 2**(np.ceil(np.log(x)))

@@ -99,7 +99,7 @@ class StepSequenceModelConvLSTM2D(nn.Module):
         self.output_size = in_width * in_height
         self.b_h_w = (0, in_height//1, in_width//1)
 
-        self.lstm = ConvLSTM(2, self.num_filter, self.b_h_w, self.kernel_size, self.device, padding = kernel_size//2, stride = 1)
+        self.lstm = ConvLSTM(2, self.num_filter, self.b_h_w, self.kernel_size, self.device, padding=kernel_size//2, stride=1)
         
         self.hidden_dim = self.b_h_w[1] * self.b_h_w[2] * self.num_filter
         self.init_net = nn.Sequential(nn.Linear(self.init_dim, self.hidden_dim))
@@ -151,7 +151,7 @@ class StepSequenceModelConv2D(nn.Module):
 
     linear_layer_input_size = out_width * out_height * num_layers2
     
-    self.rnn = nn.LSTM(input_size, hidden_dim, n_layers, batch_first = True)
+    self.rnn = nn.LSTM(input_size, hidden_dim, n_layers, batch_first=True)
     '''
     else:
       self.rnn = nn.RNN(input_size, hidden_dim, n_layers, batch_first = True, 
@@ -175,8 +175,8 @@ class StepSequenceModelConv2D(nn.Module):
     hiddens = hiddens0
     cells = cells0
     for k in range(1, self.n_layers):
-      hiddens = torch.cat((hiddens, hiddens0.detach().clone()), dim = 0)
-      cells = torch.cat((cells, cells0.detach().clone()), dim = 0)
+      hiddens = torch.cat((hiddens, hiddens0.detach().clone()), dim=0)
+      cells = torch.cat((cells, cells0.detach().clone()), dim=0)
     
     # this is a bigly hack.
     rnn_input = torch.zeros((x.size(0), x.size(1), self.input_size)).to(x.device)
@@ -323,7 +323,6 @@ def evaluateModelWithTerrainInput(model, n, initial_apex, first_step, terrain_li
     out_and_terrain = torch.cat((torch_terrain, out_processed), dim = 2)
     input = torch.cat((input, out_and_terrain.float()), dim=1)
   return outs, softmaxes, hiddens
-
 
 
 '''

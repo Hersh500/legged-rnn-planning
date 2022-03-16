@@ -40,6 +40,37 @@ class HeightMap:
         plt.show()
              
 
+    def plotStepsFromCSV(self, csv_fname, lines = False):
+        import seaborn as sns
+        import matplotlib.pyplot as plt
+
+        step_sequence_m = []
+        with open(csv_fname) as csvfile:
+            reader = csv.reader(csvfile)
+            for row in reader:
+                step_sequence_m.append([float(row[0]), float(row[1])])
+
+        labels = np.array([''] * self.terrain_array.size).reshape(self.terrain_array.shape)
+        for i, step in enumerate(step_sequence_m):
+            labels[self.m_to_idx(step)] = str(i)
+
+        if lines:
+            ax = sns.heatmap(self.terrain_array,
+                             cmap='inferno',
+                             annot=labels,
+                             annot_kws = {'fontsize':8},
+                             fmt='s',
+                             linewidths = 0.1, linecolor='black',square = True) 
+        else:
+            ax = sns.heatmap(self.terrain_array,
+                             cmap='inferno',
+                             annot=labels,
+                             annot_kws = {'fontsize':8},
+                             fmt='s', square = True) 
+            
+        plt.show()
+
+
     def m_to_idx(self, step):
         x_m, y_m = step
         row_idx = np.clip(int((y_m - self.info["corner_val_m"][1])/self.info["disc"]),
@@ -48,10 +79,31 @@ class HeightMap:
                           0, self.terrain_array.shape[1])
         return row_idx, col_idx
 
+
     def save(self, fname):
         hopper2d.saveTerrainAsCSV(fname, self.terrain_array, self.info["corner_val_m"],
                                   self.info["disc"], self.info["friction"])
 
+
+def HeightMapFromCSV(fname):
+    terrain_array = []
+    flag = False
+    with open(fname, 'r') as csvfile:
+        reader = csv.reader(csvfile)
+        for row in reader:
+            if flag:
+               disc, friction, corner_x, corner_y = [float(h) for h in row]
+            elif row[0] == "D":
+                flag = True 
+            else:
+                tmp = [float(h) for h in row]    
+                terrain_array.append(tmp)
+    terrain_array = np.array(terrain_array)
+    heightmap_info = {"disc": disc, "corner_val_m": [corner_x, corner_y],
+                      "max_x": terrain_array.shape[1] * disc + corner_x,
+                      "max_y": terrain_array.shape[0] * disc + corner_y}
+    return HeightMap(terrain_array, heightmap_info)
+        
 
 def randomDitchHeightMap(max_x, max_y, disc, num_ditches):
     x0 = 0
@@ -170,6 +222,7 @@ def generateFullDataset(num_heightmaps, num_init_states, random_params, config_l
     return all_sequences, all_initial_states, all_terrains
 
 
+
 def testHeightMapPlotting():
     disc = 0.2
     num_ditches = 2
@@ -184,6 +237,7 @@ def main():
     parser.add_argument("--config", type=str, help="path to config file", required = True)
     args = parser.parse_args()
     config_fname = args.config
+
     with open(config_fname, 'r') as f:
         config = yaml.safe_load(f)
     random_param_names = ["num_steps", "init_x_vel", "init_y_vel", "T", "goal_x"]
@@ -203,6 +257,27 @@ def main():
     shutil.copyfile(config_fname, os.path.join(terrains_folder, "config.yaml"))
     
 
+def main2():
+    terrains_folder = "heightmaps"
 
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config", type=str, help="path to config file", required = True)
+    parser.add_argument("--hmap_name", type=str)
+    args = parser.parse_args()
+    config_fname = args.config
+    hmap_name = args.hmap_name
+
+    hmap_fname = os.path.join(terrains_folder, hmap_name + ".csv")
+    seq_fname = os.path.join(terrains_folder, hmap_name + "_test_seq.csv")
+
+    with open(config_fname, 'r') as f:
+        config = yaml.safe_load(f)
+
+    random_param_names = ["num_steps", "init_x_vel", "init_y_vel", "T", "goal_x"]
+    seq, state = runOneOptimization(config, random_param_names, hmap_fname, seq_fname, 442)
+    hmap = HeightMapFromCSV(hmap_fname)
+    hmap.plotSteps(seq)
+    
+    
 if __name__ == "__main__":
-    main()
+    main2()
