@@ -2,6 +2,14 @@
 import utils
 import models
 
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import torch.optim as optim
+import torch.utils
+import torch.utils.data as data
+import torchvision
+
 # need to pass in dataset files, heightmap configs
 class SequenceDataset2D(data.Dataset):
     def __init__(self, all_sequences, all_terrains, all_ivs, max_x, max_y, disc, batch_size = 64):

@@ -222,7 +222,6 @@ def generateFullDataset(num_heightmaps, num_init_states, random_params, config_l
     return all_sequences, all_initial_states, all_terrains
 
 
-
 def testHeightMapPlotting():
     disc = 0.2
     num_ditches = 2
@@ -252,8 +251,8 @@ def main():
     print(f"made {len(all_sequences)} sequences")
 
     np.save(os.path.join(terrains_folder, "all_sequences.npy"), all_sequences)
-    np.save(os.path.join(terrains_folder, "all_states.npy"), all_sequences)
-    np.save(os.path.join(terrains_folder, "all_terrains.npy"), all_sequences)
+    np.save(os.path.join(terrains_folder, "all_states.npy"), all_states)
+    np.save(os.path.join(terrains_folder, "all_terrains.npy"), all_terrains)
     shutil.copyfile(config_fname, os.path.join(terrains_folder, "config.yaml"))
     
 

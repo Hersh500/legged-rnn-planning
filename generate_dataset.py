@@ -1,17 +1,30 @@
 import multiprocessing as mp
 import numpy as np
+import argparse
+import os
 
 import hopper
 import hopper2d
 import towr_interface
 import dataset_generation
 
-def generate_data_Cassie():
-    return
+# Set generate_heightmaps to False if they have
+# already been generated.
+def generate_gap_data_Cassie(dataset_params, generate_heightmaps=True, num_procs = 20):
+    hmap_info = dataset_params["hmap_info"]
+    num_heightmaps = dataset_params["num_heightmaps"]
+    num_sequences = dataset_params["num_sequences"]
+    hmap_folder = dataset_params["terrains_folder"]
+    max_num_gaps = dataset_params["max_num_gaps"]
+
+    num_maps_made = towr_interface.generateGapMaps(num_heightmaps, max_num_gaps, hmap_info, hmap_folder)
+    all_sequences, all_states, all_terrains = towr_interface.generateFullDataset(num_maps_made, num_sequences, random_param_names, dataset_params, hmap_folder, num_procs)
+    return all_sequences, all_states, all_terrains
+
 
 def generate_data_SLIP(dataset_params):
-    
     return
+
 
 def generate_data_SLIP2D(dataset_params, num_proc):
     # create the robot model
@@ -50,5 +63,36 @@ def generate_data_SLIP2D(dataset_params, num_proc):
             all_initial_states.append(initial_states[i])
             all_terrains.append(initial_terrains[i])
             all_sequences.append(sequences[i])
-    # Should I just build the dataset in here?
+
     return all_sequences, all_initial_states, all_terrains
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config", type=str, help="path to dataset config file", required = True)
+    parser.add_argument("--robot", type=str, help="slip, 2dslip, or cassie", required = True)
+    parser.add_argument("--num_procs", type=int, help="number of processors to use", default = 10)
+    args = parser.parse_args()
+    config_fname = args.config
+    robot = args.robot
+    num_procs = args.num_procs
+
+    with open(config_fname, 'r') as f:
+        config = yaml.safe_load(f)
+    
+    if robot == "slip":
+        print("SLIP dataset generation not yet implemented. Goodbye!")
+    if robot == "2dslip":
+        all_sequences, all_states, all_terrains = generate_data_2DSLIP(config, num_procs)
+    if robot == "cassie":
+        all_sequences, all_states, all_terrains = generate_gap_data_Cassie(config, True, num_procs)
+
+    np.save(os.path.join(terrains_folder, "all_sequences.npy"), all_sequences)
+    np.save(os.path.join(terrains_folder, "all_states.npy"), all_states)
+    np.save(os.path.join(terrains_folder, "all_terrains.npy"), all_terrains)
+    # Also should save the dataset config for future use--friction, disc, etc.
+    # Maybe read the config name, create a folder, and drop the stuff in there?
+    return
+
+if __name__ == "__main__":
+    main()
