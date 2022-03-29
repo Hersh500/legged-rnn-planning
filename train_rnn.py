@@ -61,6 +61,7 @@ def build_dataset(sequences_f, initial_states_f, terrains_f, dataset_config, bat
 
 
 # ideally should also specify whether or not to pretrain the fusion net 
+# should split this up into some sub functions, just for readability reasons
 def train_2drnn_geomloss(model_params, dataset, device, model = None):
     width = int((dataset.max_x - dataset.min_x)/dataset.disc)
     height = int((dataset.max_y - dataset.min_y)/dataset.disc)
@@ -117,10 +118,11 @@ def train_2drnn_geomloss(model_params, dataset, device, model = None):
               output = out.view(-1, height, width)
             output = output.view(-1, height*width)
             ent = -torch.sum(F.softmax(output, dim=1) * F.log_softmax(output, dim=1), dim = 1)
-            output = F.softmax(output, dim = 1).view(-1, height, width)  
+            output = F.softmax(output, dim = 1).view(-1, height, width)
             torch_targets = torch_targets.view(-1, height, width)
             # torch_targets = torchvision.transforms.GaussianBlur(3, sigma = 1).forward(torch_targets)
             # how did I calculate what size this was? was this from the gaussian blur?
+            # was it to make the size the nearest power of two? -- that would make the most sense
             output = torch.nn.functional.pad(output, (12, 12, 22, 22)).view(-1, 1, 64, 64)
             torch_targets = torch.nn.functional.pad(torch_targets, (12, 12, 22, 22)).view(-1, 1, 64, 64)
             loss = sinkhorn_images.sinkhorn_divergence(output, torch_targets, scaling = 0.7)

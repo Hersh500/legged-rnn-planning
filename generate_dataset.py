@@ -26,6 +26,7 @@ def generate_data_SLIP(dataset_params):
     return
 
 
+# TODO: rework generateRandomSequences2D to use new heightmap class...
 def generate_data_SLIP2D(dataset_params, num_proc):
     # create the robot model
     robot = hopper2d.Hopper2D(hopper.Constants)
@@ -81,18 +82,18 @@ def main():
         config = yaml.safe_load(f)
     
     if robot == "slip":
-        print("SLIP dataset generation not yet implemented. Goodbye!")
+        print("SLIP dataset generation not yet added to this script. Goodbye!")
     if robot == "2dslip":
         all_sequences, all_states, all_terrains = generate_data_2DSLIP(config, num_procs)
     if robot == "cassie":
         all_sequences, all_states, all_terrains = generate_gap_data_Cassie(config, True, num_procs)
 
-    np.save(os.path.join(terrains_folder, "all_sequences.npy"), all_sequences)
-    np.save(os.path.join(terrains_folder, "all_states.npy"), all_states)
-    np.save(os.path.join(terrains_folder, "all_terrains.npy"), all_terrains)
-    # Also should save the dataset config for future use--friction, disc, etc.
-    # Maybe read the config name, create a folder, and drop the stuff in there?
-    return
+    dataset_dir = os.path.join("datasets/", os.path.split(config_fname)[1][:-4] + "_" + robot)
+    os.mkdir(dataset_dir)
+    np.save(os.path.join(dataset_dir, "all_sequences.npy"), all_sequences)
+    np.save(os.path.join(dataset_dir, "all_states.npy"), all_states)
+    np.save(os.path.join(dataset_dir, "all_terrains.npy"), all_terrains)
+    shutil.copyfile(config_fname, os.path.join(dataset_dir, "config.yaml"))
 
 if __name__ == "__main__":
     main()

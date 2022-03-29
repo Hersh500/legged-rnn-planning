@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
 from hopper import sim_codes, sim_codes_rev
+import heightmap
 import hopper
 import csv
 
@@ -168,24 +169,24 @@ class Hopper2D:
         state = FlightState2D(x)
         return state.getDerivatives(self.constants)
 
-    def checkFlightCollision(self, state, terrain_func):
-        if state.z < terrain_func(state.x, state.y):
+    def checkFlightCollision(self, state, hmap):
+        if state.z < hmap.at(state.x, state.y):
             return sim_codes["BODY_CRASH"]
-        if state.zf < terrain_func(state.xf, state.yf) - 0.03:
+        if state.zf < hmap.at(state.xf, state.yf) - 0.03:
             return sim_codes["FOOT_CRASH"]
         return sim_codes["SUCCESS"]
 
-    def checkStanceCollision(self, state, terrain_func, terrain_normal_func, friction):
+    def checkStanceCollision(self, state, hmap):
         # check friction cone violation
         # TODO: in the future, need to actually use terrain_normal_func, currently assuming it's np.pi/2
         hyp = np.sqrt(state.xhat**2 + state.yhat**2)
         angle = np.arctan(hyp/state.zhat)
-        r_lim = np.arctan(friction)
+        r_lim = np.arctan(hmap.heightmap_info["friction"])
         if angle > r_lim:
             return sim_codes["FRICTION_CONE"]
     
         # check body crash
-        if state.zhat + state.zf < terrain_func(state.xhat + state.xf, state.yhat + state.yf):
+        if state.zhat + state.zf < hmap.at(state.xhat + state.xf, state.yhat + state.yf):
             return sim_codes["BODY_CRASH"]
 
         tot_length = np.sqrt(state.xhat**2 + state.yhat**2 + state.zhat**2)
@@ -200,7 +201,7 @@ class Hopper2D:
         return state.getDerivatives(self.constants)
 
 
-    def simulateOneFlightPhase(self, x_init, u, terrain_func, till_apex = False, hit_apex = False, init_from_stance = False, tstep = 0.01):
+    def simulateOneFlightPhase(self, x_init, u, hmap, till_apex = False, hit_apex = False, init_from_stance = False, tstep = 0.01):
         if init_from_stance:
             x0_flight = self.stanceToFlight(x_init)
         else:
@@ -240,20 +241,20 @@ class Hopper2D:
 
             flight_states.append(state.getArray())
 
-            cur_ter_loc = terrain_func(state.xf, state.yf)
-            flat_check = (terrain_func(state.xf + 0.05, state.yf + 0.05) == cur_ter_loc and
-                    terrain_func(state.xf - 0.05, state.yf - 0.05) == cur_ter_loc and
-                    terrain_func(state.xf - 0.05, state.yf) == cur_ter_loc and
-                    terrain_func(state.xf + 0.05, state.yf) == cur_ter_loc and
-                    terrain_func(state.xf, state.yf - 0.05) == cur_ter_loc and
-                    terrain_func(state.xf, state.yf + 0.05) == cur_ter_loc)
+            cur_ter_loc = hmap.at(state.xf, state.yf)
+            flat_check = (hmap.at(state.xf + 0.05, state.yf + 0.05) == cur_ter_loc and
+                    hmap.at(state.xf - 0.05, state.yf - 0.05) == cur_ter_loc and
+                    hmap.at(state.xf - 0.05, state.yf) == cur_ter_loc and
+                    hmap.at(state.xf + 0.05, state.yf) == cur_ter_loc and
+                    hmap.at(state.xf, state.yf - 0.05) == cur_ter_loc and
+                    hmap.at(state.xf, state.yf + 0.05) == cur_ter_loc)
 
             # This condition checks if the robot landed
-            if hit_apex and state.zf <= terrain_func(state.xf, state.yf) and flat_check:
+            if hit_apex and state.zf <= hmap.at(state.xf, state.yf) and flat_check:
                 break
 
             # ensures we've actually taken off before checking for collision
-            ret_val = self.checkFlightCollision(state, terrain_func)
+            ret_val = self.checkFlightCollision(state, hmap)
             if ret_val < 0:
                 break
         if not integrator.successful():
@@ -263,7 +264,7 @@ class Hopper2D:
         return ret_val, flight_states, integrator.t
 
 
-    def simulateOneStancePhase(self, last_flight, terrain_func, terrain_normal_func, friction, tstep = 0.01):
+    def simulateOneStancePhase(self, last_flight, hmap, tstep = 0.01):
         x0_stance = self.flightToStance(last_flight)
         integrator = ode(self.stanceDynamics)
         integrator.set_initial_value(x0_stance, 0)
@@ -282,40 +283,36 @@ class Hopper2D:
             length = state.xhat**2 + state.yhat**2 + state.zhat**2
             if length >= self.constants.L**2:
               break
-            code = self.checkStanceCollision(state,
-                                          terrain_func,
-                                          terrain_normal_func = terrain_normal_func,
-                                          friction = friction)
+            code = self.checkStanceCollision(state, hmap)
             if code < 0:
                 break
         return code, stance_states, integrator.t
 
 
 # Returns the success, next apex, touchdown location (last flight state)
-def getNextApex2D(robot, x_flight, angles, terrain_func,
-                  terrain_normal_func, friction, at_apex = True, return_count = False):
-    code, flight_states1, t = robot.simulateOneFlightPhase(x_flight, angles, terrain_func, till_apex = False, hit_apex = at_apex, init_from_stance = False, tstep = 0.01)
+def getNextApex2D(robot, x_flight, angles, hmap, at_apex = True, return_count = False):
+    code, flight_states1, t = robot.simulateOneFlightPhase(x_flight, angles, hmap, till_apex = False, hit_apex = at_apex, init_from_stance = False, tstep = 0.01)
     if code < 0:
         if return_count:
             return code, [], [], len(flight_states1)
         else:
             return code, [], []
 
-    code, stance_states, t_stance = robot.simulateOneStancePhase(flight_states1[-1], terrain_func, terrain_normal_func, friction, tstep = 0.01)
+    code, stance_states, t_stance = robot.simulateOneStancePhase(flight_states1[-1], hmap, tstep = 0.01)
     if code < 0:
         if return_count:
             return code, [], [], len(flight_states1) + len(stance_states)
         else:
             return code, [], []
 
-    code, flight_states2, t_flight = robot.simulateOneFlightPhase(stance_states[-1], [0, 0], terrain_func, till_apex = True, hit_apex = False, init_from_stance = True, tstep = 0.01)
+    code, flight_states2, t_flight = robot.simulateOneFlightPhase(stance_states[-1], [0, 0], hmap, till_apex = True, hit_apex = False, init_from_stance = True, tstep = 0.01)
     if code < 0:
         if return_count:
             return code, [], [], len(flight_states1) + len(stance_states) + len(flight_states2)
         else:
             return code, [], []
 
-    code, flight_states3, t_flight = robot.simulateOneFlightPhase(flight_states2[-1], [0, 0], terrain_func, till_apex = False, hit_apex = True, init_from_stance = False, tstep = 0.01)
+    code, flight_states3, t_flight = robot.simulateOneFlightPhase(flight_states2[-1], [0, 0], hmap, till_apex = False, hit_apex = True, init_from_stance = False, tstep = 0.01)
     if code < 0:
         if return_count:
             return code, [], [], len(flight_states1) + len(stance_states) + len(flight_states2) + len(flight_states3)
