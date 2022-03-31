@@ -36,7 +36,7 @@ def generate_data_SLIP2D(dataset_params, num_proc):
 
     def gen_args(seed):
         return (robot,
-                dataset_params["num_terrains"],
+                dataset_params["num_heightmaps_per_thread"],
                 dataset_params["num_states"],
                 dataset_params["num_seqs_per"],
                 dataset_params["min_num_steps"],

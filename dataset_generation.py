@@ -2,6 +2,7 @@ import numpy as np
 
 import hopper
 import hopper2d
+from heightmap import Heightmap 
 import astar_tree_search
 from astar_tree_search import aStarHelper
 import terrain_utils
@@ -143,6 +144,7 @@ def generateTerrainStepDataset2D(num_terrains, until_x, until_y, disc):
 
 
 # terrain_params = [friction, max_x, max_y, disc]
+# DEPRECATED
 def generateCurricularDataset2D(robot,
                                 max_num_feats,
                                 terrain_schedule,
@@ -226,10 +228,8 @@ def generateCurricularDataset2D(robot,
 
 # breaking this out for use in generating the curricular dataset
 def generateSequencesForScenario(robot,
-                                terrain_func,
-                                terrain_array,
+                                hmap,
                                 initial_apex,
-                                friction,
                                 goal,
                                 cost_fn,
                                 num_astar_sequences,
@@ -250,9 +250,7 @@ def generateSequencesForScenario(robot,
                                                                   15,
                                                                   num_astar_sequences,
                                                                   cost_fn,
-                                                                  terrain_func,
-                                                                  lambda x,y:np.pi/2,
-                                                                  friction,
+                                                                  hmap,
                                                                   get_full_tree = full_tree)
     for l, ss in enumerate(step_sequences):
       cond = len(ss) > min_steps and ss[-1][0] >= ss[0][0] and ss[-1][1] >= ss[0][1]
@@ -262,7 +260,7 @@ def generateSequencesForScenario(robot,
         success_count += 1
         # xdot, ydot, z height
         initial_condition = [initial_apex[3], initial_apex[4], initial_apex[2]]
-        initial_terrains.append(terrain_array)
+        initial_terrains.append(hmap)
         sequences.append(ss)
         initial_states.append(initial_condition)
     if success_count < num_astar_sequences:
@@ -272,9 +270,7 @@ def generateSequencesForScenario(robot,
                                              15,
                                              num_astar_sequences,
                                              cost_fn,
-                                             terrain_func,
-                                             lambda x,y:np.pi/2,
-                                             friction,
+                                             hmap,
                                              get_full_tree = full_tree)
       for l, ss in enumerate(step_sequences):
         cond = len(ss) > min_steps and ss[-1][0] >= ss[0][0]
@@ -284,28 +280,27 @@ def generateSequencesForScenario(robot,
           success_count += 1
           # xdot, ydot, z height
           initial_condition = [initial_apex[3], initial_apex[4], initial_apex[2]]
-          initial_terrains.append(terrain_array)
+          initial_terrains.append(hmap)
           sequences.append(ss)
           initial_states.append(initial_condition)
       num_tries += 1
   return sequences, initial_terrains, initial_states
 
 
-def generateRandomSequences2D(robot,
-                            num_terrains, 
-                            num_apexes,
-                            num_astar_sequences,
-                            min_steps,
-                            friction,
-                            cost_fn = astar_tree_search.stateCost,
-                            full_tree = False,
-                            only_ditch = False,
-                            progress = 0.5,
-                            until_x = 5,
-                            until_y = 5,
-                            disc = 0.1,
-                            seed = 42,
-                            path = './tmp/'):
+# should parameterize everything: max_z, min_x_dot, etc.
+def generateSequences2D(robot,
+                        num_terrains,
+                        num_apexes,
+                        num_astar_sequences,
+                        min_steps,
+                        hmap_params,
+                        state_lims,
+                        cost_fn = astar_tree_search.stateCost,
+                        full_tree = False,
+                        only_ditch = False,
+                        progress = 0.5,
+                        seed = 42,
+                        path = './tmp/'):
   
   # print("using seed,", seed)
   np.random.seed(seed)
@@ -314,16 +309,15 @@ def generateRandomSequences2D(robot,
   sequences = [] # list of lists of feasible steps
   final_apexes = []
 
-  max_z = 1.5
-  min_z = 0.8
+  max_z = state_lims["z"]["max"]
+  min_z = state_lims["z"]["min"]
 
-  min_x_dot = -0.5
-  max_x_dot = 2
-  min_y_dot = -0.5
-  max_y_dot = 2
+  min_x_dot = state_lims["xdot"]["min"]
+  max_x_dot = state_lims["xdot"]["max"]
+  min_y_dot = state_lims["ydot"]["min"]
+  max_y_dot = state_lims["ydot"]["max"]
 
-  terrain_arrays = []
-  terrain_functions = []
+  heightmaps = [] 
   # rework this: the number of features is too small, resulting in uninteresting trajs.
   if only_ditch:
     max_num_ditches = min(6, num_terrains+1)
@@ -337,21 +331,18 @@ def generateRandomSequences2D(robot,
   for num_ditches in range(offset, offset + max_num_ditches):
     if not only_ditch:
       for _ in range(num_terrains//(2 * (max_num_ditches - 1))):
-        terrain_array, terrain_func = hopper2d.generateRandomTerrain2D(until_x, until_y, disc, num_ditches)
-        terrain_arrays.append(terrain_array)
-        terrain_functions.append(terrain_func)
+        hmap = hopper2d.generateRandomTerrain2D(hmap_params, num_ditches)
+        heightmaps.append(hmap)
     else:
       for _ in range(num_terrains//((max_num_ditches - 1))):
-        terrain_array, terrain_func = hopper2d.generateRandomTerrain2D(until_x, until_y, disc, num_ditches)
-        terrain_arrays.append(terrain_array)
-        terrain_functions.append(terrain_func)
+        hmap = hopper2d.generateRandomTerrain2D(hmap_params, num_ditches)
+        heightmaps.append(hmap)
 
   if not only_ditch:
     for num_steps in range(offset, offset + max_num_steps):
       for _ in range(num_terrains//(2 * (max_num_steps - 1))):
-        terrain_array, terrain_func = hopper2d.generateRandomStepTerrain2D(until_x, until_y, disc, num_steps)
-        terrain_arrays.append(terrain_array)
-        terrain_functions.append(terrain_func)
+        hmap = hopper2d.generateRandomStepTerrain2D(hmap_params, num_steps)
+        heightmaps.append(hmap)
 
   # Generate the initial apexes
   random_initial_apexes = np.zeros((max(50, num_apexes), 13))
@@ -368,16 +359,13 @@ def generateRandomSequences2D(robot,
 
   # Actually generate the training sequenecs
   max_tries = 2
-  for i in range(len(terrain_arrays)):
-    this_arr = terrain_arrays[i].tolist()
+  for i in range(len(heightmaps)):
     random_indices = (np.random.rand(num_apexes) * random_initial_apexes.shape[0]).astype(int)
     apexes = random_initial_apexes[random_indices]
     for initial_apex in apexes:
       s, t, i_s = generateSequencesForScenario(robot,
-                                            terrain_func,
-                                            terrain_array,
+                                            hmap,
                                             initial_apex,
-                                            friction,
                                             [until_x, until_y//2,0,0],
                                             cost_fn,
                                             num_astar_sequences,
@@ -388,6 +376,7 @@ def generateRandomSequences2D(robot,
       initial_states += i_s
     print("finished terrain", i)
 
+  # TODO: now, terrains is a nasty pickled array of python classes. Is this an issue?
   np.save(path + "terrains_" + str(seed), initial_terrains)
   np.save(path + "sequences_" + str(seed), sequences)
   np.save(path + "states_" + str(seed), initial_states)

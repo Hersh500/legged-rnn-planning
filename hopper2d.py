@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
 from hopper import sim_codes, sim_codes_rev
-import heightmap
+from heightmap import HeightMap
 import hopper
 import csv
 
@@ -181,7 +181,7 @@ class Hopper2D:
         # TODO: in the future, need to actually use terrain_normal_func, currently assuming it's np.pi/2
         hyp = np.sqrt(state.xhat**2 + state.yhat**2)
         angle = np.arctan(hyp/state.zhat)
-        r_lim = np.arctan(hmap.heightmap_info["friction"])
+        r_lim = np.arctan(hmap.info["friction"])
         if angle > r_lim:
             return sim_codes["FRICTION_CONE"]
     
@@ -325,69 +325,23 @@ def getNextApex2D(robot, x_flight, angles, hmap, at_apex = True, return_count = 
         return code, flight_states3[-1], flight_states2[-1]
     
 
+## TODO: convert all below to use heightmaps, and to convert 2D A* to use heightmaps
+## and to convert RNN evaluation code to use heightmaps
+## and to save datasets as pickles of the class
+## --think about how to save this stuff--is the pickling overhead actually that bad?
+
 # ditch_info is a 2D array:
 # [[ditch_x, ditch_y, x_width, y_width]]
-def generateTerrain2D(max_x, max_y, disc, ditch_info):
-    terrain_array = np.zeros((int(max_y/disc), int(max_x/disc)))
-    for ditch in ditch_info:
-        x_idx = int(ditch[0]/disc)
-        y_idx = int(ditch[1]/disc)
-        x_end = int((ditch[0] + ditch[2])/disc)
-        y_end = int((ditch[1] + ditch[3])/disc)
-        terrain_array[y_idx:y_end, x_idx:x_end] = -1
-    
-    def terrain_func(x, y):
-        x_disc = int(x/disc)
-        y_disc = int(y/disc)
-        if x < -0.25:
-            return -2
-        elif y < -0.25:
-            return -2
-        elif y < 0:
-            return 0
-        elif x < 0:
-            return 0
-        elif y > max_y + 0.25:
-            return -2
-        elif x >= max_x:
-            return 0
-        elif y >= max_y:
-            return 0
-        else:
-            return terrain_array[y_disc][x_disc]
-    return terrain_array, terrain_func
-
-
-def generateStepTerrain2D(max_x, max_y, disc, step_info):
-    terrain_array = np.zeros((int(max_y/disc), int(max_x/disc)))
-    for step in step_info:
-        x_idx = int(step[0]/disc)
-        y_idx = int(step[1]/disc)
-        x_end = int((step[0] + step[2])/disc)
-        y_end = int((step[1] + step[3])/disc)
-        height = step[4]
-        terrain_array[y_idx:y_end, x_idx:x_end] = height
-    
-    def terrain_func(x, y):
-        x_disc = int(x/disc)
-        y_disc = int(y/disc)
-        if x < -1:
-            return -2
-        elif y < -0.25:
-            return -2 
-        elif y < 0:
-            return 0
-        elif x < 0:
-            return 0
-        elif y > max_y + 0.25:
-            return -2
-        elif x >= max_x:
-            return 0
-        elif y >= max_y:
-            return 0
-        else:
-            return terrain_array[y_disc][x_disc]
-    return terrain_array, terrain_func
+def generateTerrain2D(params, feature_info):
+    disc = params["disc"]
+    terrain_array = np.zeros((int(params["max_y"]/disc), int(params["max_x"]/disc)))
+    for feat in feature_info:
+        x_idx = int(feat[0]/disc)
+        y_idx = int(feat[1]/disc)
+        x_end = int((feat[0] + ditch[2])/disc)
+        y_end = int((feat[1] + ditch[3])/disc)
+        terrain_array[y_idx:y_end, x_idx:x_end] = feat[4]
+    return HeightMap(terrain_array, params)
 
 
 # disc is the length of one side of each square (discretized)
@@ -398,43 +352,23 @@ def generateRandomStepTerrain2D(max_x, max_y, disc, num_steps):
 
     max_height = 0.6
     min_height = 0.1
-    # y is rows, x is columns
-    terrain_array = np.zeros((int(max_y/disc), int(max_x/disc)))
-    prev_step_end_x = 0
-    prev_step_end_y = 0
-    for _ in range(num_steps):
-        cur_step_x = np.random.rand() * (max_x - 1) + 1
-        cur_step_y = np.random.rand() * max_y
-        cur_step_x_width = np.random.rand() * (max_width - min_width) + min_width
-        cur_step_y_width = np.random.rand() * (max_width - min_width) + min_width
-        
-        prev_step_end_x = cur_step_x + cur_step_x_width
-        prev_step_end_y = cur_step_y + cur_step_y_width
-        x_start_idx, x_end_idx = int(cur_step_x/disc), int(prev_step_end_x/disc)
-        y_start_idx, y_end_idx = int(cur_step_y/disc), int(prev_step_end_y/disc)
-        terrain_array[y_start_idx:y_end_idx, x_start_idx:x_end_idx] = np.random.rand() * (max_height - min_height) + min_height
-    
-    def terrain_func(x, y):
-        x_disc = int(x/disc)
-        y_disc = int(y/disc)
-        if x < -1:
-            return -2
-        elif y < -0.25:
-            return -2
-        elif y < 0:
-            return 0
-        elif x < 0:
-            return 0
-        elif y > max_y + 0.25:
-            return -2
-        elif x >= max_x:
-            return 0
-        elif y >= max_y:
-            return 0
-        else:
-            return terrain_array[y_disc][x_disc]
 
-    return terrain_array, terrain_func
+    terrain_array = np.zeros((int(params["max_y"]/disc), int(params["max_x"]/disc)))
+    hmap = HeightMap(terrain_array, params)
+    prev_ditch_end_x = params["corner_val_m"][0]
+    prev_ditch_end_y = params["corner_val_m"][1]
+    for _ in range(num_ditches):
+        cur_ditch_x = np.random.uniform(1, params["max_x"])
+        cur_ditch_y = np.random.uniform(0, params["max_y"])
+        cur_ditch_x_width = np.random.uniform(min_width, max_width)
+        cur_ditch_y_width = np.random.uniform(min_width, max_width)
+        
+        prev_ditch_end_x = cur_ditch_x + cur_ditch_x_width
+        prev_ditch_end_y = cur_ditch_y + cur_ditch_y_width
+        start_row, start_col = hmap.m_to_idx((cur_ditch_x, cur_ditch_y))
+        end_row, end_col = hmap.m_to_idx((prev_ditch_end_x, prev_ditch_end_y))
+        hmap.terrain_array[start_row:end_row, start_col:end_col] = np.random.uniform(min_height, max_height)
+    return hmap
 
 
 def generateGaps2D(max_x, max_y, disc, num_ditches, gap_lims = (0.1, 0.3)):
@@ -443,51 +377,29 @@ def generateGaps2D(max_x, max_y, disc, num_ditches, gap_lims = (0.1, 0.3)):
     return terrain_array, terrain_func
 
 
-# disc is the length of one side of each square (discretized)
-def generateRandomTerrain2D(max_x, max_y, disc, num_ditches):
-    # max width in any single dimension
+def generateRandomTerrain2D(params, num_ditches):
     max_width = 2
     min_width = 0.6
-    # y is rows, x is columns
-    terrain_array = np.zeros((int(max_y/disc), int(max_x/disc)))
-    prev_ditch_end_x = 0
-    prev_ditch_end_y = 0
+    disc = params["disc"]
+    x_min = params["corner_val_m"][0]
+    y_min = params["corner_val_m"][1]
+
+    terrain_array = np.zeros((int((params["max_y"] - y_min)/disc), int((params["max_x"] - x_min)/disc)))
+    hmap = HeightMap(terrain_array, params)
     for _ in range(num_ditches):
-        cur_ditch_x = np.random.rand() * (max_x - 1) + 1
-        cur_ditch_y = np.random.rand() * max_y
-        cur_ditch_x_width = np.random.rand() * (max_width - min_width) + min_width
-        cur_ditch_y_width = np.random.rand() * (max_width - min_width) + min_width
-        # print(cur_ditch_x, cur_ditch_y, cur_ditch_x_width, cur_ditch_y_width)
+        cur_ditch_x = np.random.uniform(1, params["max_x"])
+        cur_ditch_y = np.random.uniform(0, params["max_y"])
+        cur_ditch_x_width = np.random.uniform(min_width, max_width)
+        cur_ditch_y_width = np.random.uniform(min_width, max_width)
         
         prev_ditch_end_x = cur_ditch_x + cur_ditch_x_width
         prev_ditch_end_y = cur_ditch_y + cur_ditch_y_width
-        x_start_idx, x_end_idx = int(cur_ditch_x/disc), int(prev_ditch_end_x/disc)
-        # print(x_start_idx, x_end_idx)
-        y_start_idx, y_end_idx = int(cur_ditch_y/disc), int(prev_ditch_end_y/disc)
-        # print(y_start_idx, y_end_idx)
-        terrain_array[y_start_idx:y_end_idx, x_start_idx:x_end_idx] = -1  # TODO: vary this depth
-    
-    def terrain_func(x, y):
-        x_disc = int(x/disc)
-        y_disc = int(y/disc)
-        if x < -1:
-            return -2
-        elif y < -0.25:
-            return -2
-        elif y > max_y + 0.25:
-            return -2
-        elif y < 0:
-            return 0
-        elif x < 0:
-            return 0
-        elif x >= max_x:
-            return 0
-        elif y >= max_y:
-            return 0
-        else:
-            return terrain_array[y_disc][x_disc]
-
-    return terrain_array, terrain_func
+        start_row, start_col = hmap.m_to_idx((cur_ditch_x, cur_ditch_y))
+        end_row, end_col = hmap.m_to_idx((prev_ditch_end_x, prev_ditch_end_y))
+        print(f"start, end rows:{start_row, end_row}")
+        print(f"start, end cols:{start_col, end_col}")
+        hmap.terrain_array[start_row:end_row, start_col:end_col] = -1  # TODO: vary this depth
+    return hmap
 
 
 # Need to save actual heightmap, upper left corner, and discretization.

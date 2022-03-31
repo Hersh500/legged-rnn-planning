@@ -6,10 +6,15 @@ class HeightMap:
     def __init__(self, terrain_array, heightmap_info):
         self.info = heightmap_info
         self.terrain_array = terrain_array
-        return
-
+        return 
 
     def at(self, x_m, y_m):
+        padding = self.info["padding"]
+        if (x_m > self.info["max_x"] + padding or
+           x_m < self.info["corner_val_m"][0] - padding or
+           y_m > self.info["max_y"] + padding or
+           y_m < self.info["corner_val_m"][1] - padding):
+            return -2
         row, col = self.m_to_idx((x_m, y_m))
         return self.terrain_array[row][col]
 
@@ -76,9 +81,9 @@ class HeightMap:
     def m_to_idx(self, step):
         x_m, y_m = step
         row_idx = np.clip(int((y_m - self.info["corner_val_m"][1])/self.info["disc"]),
-                          0, self.terrain_array.shape[0])
+                          0, self.terrain_array.shape[0] - 1)
         col_idx = np.clip(int((x_m - self.info["corner_val_m"][0])/self.info["disc"]),
-                          0, self.terrain_array.shape[1])
+                          0, self.terrain_array.shape[1] - 1)
         return row_idx, col_idx
 
 
@@ -101,18 +106,23 @@ def HeightMapFromCSV(fname):
                 tmp = [float(h) for h in row]    
                 terrain_array.append(tmp)
     terrain_array = np.array(terrain_array)
+    # padding is just the default value here.
+    # Need to think about a better way to approach this.
     heightmap_info = {"disc": disc, "corner_val_m": [corner_x, corner_y],
                       "max_x": terrain_array.shape[1] * disc + corner_x,
                       "max_y": terrain_array.shape[0] * disc + corner_y,
-                      "friction": friction}
+                      "friction": friction, "padding": 0.25}
     return HeightMap(terrain_array, heightmap_info)
         
 
-def randomDitchHeightMap(max_x, max_y, disc, num_ditches):
+def randomDitchHeightMap(max_x, max_y, disc, friction, num_ditches):
     x0 = 0
     y0 = -2
-    terrain_array, terrain_func = hopper2d.generateRandomTerrain2D(max_x - x0, max_y - y0, disc, num_ditches) 
-    return HeightMap(terrain_array, (x0, y0), disc)
+    heightmap_info = {"disc": disc, "corner_val_m": [x0, y0],
+                      "max_x": max_x,
+                      "max_y": max_y,
+                      "friction": friction, "padding": 0.25}
+    return hopper2d.generateRandomTerrain2D(heightmap_info, num_ditches) 
 
 
 def gapHeightMap(heightmap_info, gap_xs, gap_widths):

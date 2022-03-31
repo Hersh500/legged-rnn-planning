@@ -3,6 +3,7 @@ import hopper
 import hopper2d
 import queue
 from scipy.spatial import KDTree
+import heightmap
 
 # All of the astar utilities
 class GraphNode:
@@ -534,19 +535,18 @@ def sampleAnglesInCircle(num_samples_sqrt, friction):
     return thetas, phis
 
 
-def sampleAngles2D(robot, num_samples_sqrt, cur_apex, terrain_func, terrain_normal_func, friction):
+def sampleAngles2D(robot, num_samples_sqrt, cur_apex, hmap):
     # pitch_angles = np.linspace(-np.arctan(friction), np.arctan(friction), num_samples_sqrt)
     # roll_angles = np.linspace(-np.arctan(friction), np.arctan(friction), num_samples_sqrt)
     # all_pitches, all_rolls = np.meshgrid(pitch_angles, roll_angles) 
     # all_pitches, all_rolls = all_pitches.flatten(), all_rolls.flatten()
-    all_pitches, all_rolls = sampleAnglesInCircle(num_samples_sqrt, friction)
+    all_pitches, all_rolls = sampleAnglesInCircle(num_samples_sqrt, hmap.info["friction"])
     apexes, last_flights, angles = [], [], []
     total_count = 0
     for i in range(len(all_pitches)):
         u = [all_pitches[i], all_rolls[i]]
         # print("trying angles", u)
-        code, last_flight, next_apex, count = hopper2d.getNextApex2D(robot, cur_apex, u, terrain_func, terrain_normal_func,
-                                                                    friction, at_apex = True, return_count = True)
+        code, last_flight, next_apex, count = hopper2d.getNextApex2D(robot, cur_apex, u, hmap, at_apex = True, return_count = True)
         # print("next apex:", next_apex)
         if code == 0:
             apexes.append(next_apex)
@@ -585,8 +585,7 @@ def inOrderHelper2D(root_node, goal):
 
 
 def angleAstar2Dof(robot, x0_apex, goal_state, num_samples_sqrt, 
-                   num_goal_des, cost_fn, terrain_func, terrain_normal_func,
-                   friction, get_full_tree = False):
+                   num_goal_des, cost_fn, hmap, get_full_tree = False):
     pq = queue.PriorityQueue()
     goal_nodes = []
     num_goal_nodes = 0
@@ -611,8 +610,7 @@ def angleAstar2Dof(robot, x0_apex, goal_state, num_samples_sqrt,
         # dequeue top node
     while num_goal_nodes < num_goal_des and iters < timeout:
         # print("on node with apex", cur_node.apex[0:2], "step loc:", cur_node.x_loc)
-        next_apexes, last_flights, angles, total_count = sampleAngles2D(robot, num_samples_sqrt, cur_apex, 
-                                                                        terrain_func, terrain_normal_func, friction)
+        next_apexes, last_flights, angles, total_count = sampleAngles2D(robot, num_samples_sqrt, cur_apex, hmap)
         if len(last_flights) > 0:
             tree = KDTree(np.array([[p[0], p[1]] for p in last_flights]))
         total_odes += total_count
@@ -667,8 +665,7 @@ def angleAstar2Dof(robot, x0_apex, goal_state, num_samples_sqrt,
 
 
 def footSpaceAStar2D(robot, step_controller, x0_apex, goal_state, horizon, num_samples_sqrt,
-                     num_goal_des, cost_fn, terrain_func, terrain_normal_func,
-                     friction, get_full_tree = False):
+                     num_goal_des, cost_fn, hmap, get_full_tree = False):
     pq = queue.PriorityQueue()
     goal_nodes = []
     num_goal_nodes = 0
@@ -700,8 +697,7 @@ def footSpaceAStar2D(robot, step_controller, x0_apex, goal_state, horizon, num_s
             x_Lstep = xx[i] - cur_apex[0]
             y_Lstep = yy[i] - cur_apex[1]
             u = step_controller.calcAngle(x_Lstep, cur_apex[3], y_Lstep, cur_apex[4], cur_apex[2])
-            code, last_flight, next_apex, count = hopper2d.getNextApex2D(robot, cur_apex, u, terrain_func, terrain_normal_func,
-                                                                         friction, at_apex = True, return_count = True)
+            code, last_flight, next_apex, count = hopper2d.getNextApex2D(robot, cur_apex, u, hmap, at_apex = True, return_count = True)
             total_count += count
             if code == 0:
                 last_flights.append(last_flight)
@@ -769,8 +765,7 @@ def discrete_sampling2D(distr, num_samples, disc):
 
 
 def RNNGuidedAStar2D(robot, step_controller, conv_rnn_planner, x0_apex, goal_state, num_samples,
-                     num_goal_des, cost_fn, terrain_func, terrain_normal_func,
-                     friction, get_full_tree = False, sampling_method = "distribution"):
+                     num_goal_des, cost_fn, hmap, get_full_tree = False, sampling_method = "distribution"):
     pq = queue.PriorityQueue()
     goal_nodes = []
     num_goal_nodes = 0
@@ -798,7 +793,7 @@ def RNNGuidedAStar2D(robot, step_controller, conv_rnn_planner, x0_apex, goal_sta
                         int(conv_rnn_planner.max_x/conv_rnn_planner.disc)))
     for i in range(t_array.shape[0]):
       for j in range(t_array.shape[1]):
-        t_array[i][j] = terrain_func(xx[i][j] + x0_apex[0], yy[i][j] + x0_apex[1])
+        t_array[i][j] = hmap.at(xx[i][j] + x0_apex[0], yy[i][j] + x0_apex[1])
 
     while num_goal_nodes < num_goal_des and iters < timeout:
         if sampling_method == "distribution":
@@ -831,8 +826,7 @@ def RNNGuidedAStar2D(robot, step_controller, conv_rnn_planner, x0_apex, goal_sta
             x_Lstep = xx - cur_node.x_loc[0][0] + x0_apex[0]
             y_Lstep = yy - cur_node.x_loc[0][1] + x0_apex[1]
             u = step_controller.calcAngle(x_Lstep, cur_apex[3], y_Lstep, cur_apex[4], cur_apex[2])
-            code, last_flight, next_apex, count = hopper2d.getNextApex2D(robot, cur_apex, u, terrain_func, terrain_normal_func,
-                                                                         friction, at_apex = True, return_count = True)
+            code, last_flight, next_apex, count = hopper2d.getNextApex2D(robot, cur_apex, u, hmap, at_apex = True, return_count = True)
             total_count += count
             # print("tried sample", next_samples[i], "got code,", code)
             if code == 0:
@@ -876,7 +870,7 @@ def RNNGuidedAStar2D(robot, step_controller, conv_rnn_planner, x0_apex, goal_sta
     steps = path_from_parent2(goal_nodes[0])
     return steps, total_odes
 
-def cost_fn2d(state, neighbors, goal_state, step):
+def cost_fn2d(state, neighbors, apex, goal_state, step):
     x = state[0]
     y = state[1]
     return np.abs(x - goal_state[0]) + np.abs(y - goal_state[1])
@@ -893,21 +887,19 @@ def terrain_func(x, y):
 
 def main():
     robot = hopper2d.Hopper2D(hopper.Constants())
-    # terrain_func = lambda x,y: 0
-    terrain_normal_func = lambda x,y: np.pi/2
-    friction = 0.8
+    hmap = heightmap.randomDitchHeightMap(5, 2, 0.1, 0.8, 4)
+    hmap.plotSteps([])
     initial_state = hopper2d.FlightState2D()
     initial_state.x = 0
     initial_state.y = 0
     initial_state.z = 1.1
     initial_state.zf = initial_state.z - robot.constants.L
     initial_apex = initial_state.getArray()
-    goal = [1, 1, 0, 0]
+    goal = [3, 0, 0, 0]
     cost_fn = cost_fn2d
-    paths, odes = angleAstar2Dof(robot, initial_apex, goal, 12, 
-                           3, cost_fn, terrain_func, terrain_normal_func,
-                           friction, get_full_tree = False)
-    print(paths)
+    all_locs, all_angles, odes = angleAstar2Dof(robot, initial_apex, goal, 12, 
+                           3, cost_fn, hmap, get_full_tree = False)
+    print(all_locs)
     return
 
 if __name__ == "__main__":

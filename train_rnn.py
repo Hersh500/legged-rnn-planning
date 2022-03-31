@@ -60,6 +60,11 @@ def build_dataset(sequences_f, initial_states_f, terrains_f, dataset_config, bat
                              dataset_config["disc"], batch_size)
 
 
+def calcGeomLoss(output, target, ent_coeff):
+    ent = -torch.sum(F.softmax(output, dim=1) * F.log_softmax(output, dim=1), dim = 1) * ent_coeff
+    return
+
+
 # ideally should also specify whether or not to pretrain the fusion net 
 # should split this up into some sub functions, just for readability reasons
 def train_2drnn_geomloss(model_params, dataset, device, model = None):
@@ -120,7 +125,6 @@ def train_2drnn_geomloss(model_params, dataset, device, model = None):
             ent = -torch.sum(F.softmax(output, dim=1) * F.log_softmax(output, dim=1), dim = 1)
             output = F.softmax(output, dim = 1).view(-1, height, width)
             torch_targets = torch_targets.view(-1, height, width)
-            # torch_targets = torchvision.transforms.GaussianBlur(3, sigma = 1).forward(torch_targets)
             # how did I calculate what size this was? was this from the gaussian blur?
             # was it to make the size the nearest power of two? -- that would make the most sense
             output = torch.nn.functional.pad(output, (12, 12, 22, 22)).view(-1, 1, 64, 64)
@@ -142,3 +146,7 @@ def train_2drnn_geomloss(model_params, dataset, device, model = None):
           print("Loss: {:.4f}".format(np.mean(losses)))
  
     return model
+
+def main():
+    # first, see if we can load the old SLIP2D datasets properly.
+    # have to define the old dataset configurations.
