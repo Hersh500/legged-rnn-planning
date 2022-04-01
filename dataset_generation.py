@@ -603,12 +603,5 @@ def generateRandomSequences2(robot,
   return initial_states, sequences
 
 
-def main():
-    # test some dataset generation
-    state_lims = {"z": {"min": 0.7, "max":1.5}, "xdot":{"min":0, "max":1}, "ydot":{"min":-0.5, "max":0.5}} 
-    seqs, terrains, states = generateSLIPSequences2D()
-    return
-
-
 if __name__ == "__main__":
     main()

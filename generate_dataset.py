@@ -120,8 +120,9 @@ def main():
     if robot == "cassie":
         all_sequences, all_states, all_terrains = generate_gap_data_Cassie(config, True, num_procs)
 
-    dataset_dir = os.path.join("datasets/", os.path.split(config_fname)[1][:-4] + "_" + robot)
-    os.mkdir(dataset_dir)
+    dataset_dir = os.path.join("datasets/", os.path.split(config_fname)[1][:-5] + "_" + robot)
+    if not os.path.exists(dataset_dir):
+        os.mkdir(dataset_dir)
     np.save(os.path.join(dataset_dir, "all_sequences.npy"), all_sequences)
     np.save(os.path.join(dataset_dir, "all_states.npy"), all_states)
     np.save(os.path.join(dataset_dir, "all_terrains.npy"), all_terrains)

@@ -52,6 +52,7 @@ def build_dataset(sequences_f, initial_states_f, terrains_f, dataset_config, bat
     # load data from files
     all_initial_states = np.load(initial_states_f, allow_pickle=True)
     all_sequences = np.load(sequences_f, allow_pickle=True)
+    # now all terrains is a list of HeightMap objects. How much more expensive is this for large datasets? -- or, do I just save them as arrays with the associated config?
     all_terrains = np.load(terrains_f, allow_pickle=True)
 
     # assemble into pytorch dataset
@@ -60,8 +61,18 @@ def build_dataset(sequences_f, initial_states_f, terrains_f, dataset_config, bat
                              dataset_config["disc"], batch_size)
 
 
-def calcGeomLoss(output, target, ent_coeff):
+def calc_geom_loss(output, target, ent_coeff, height, width):
     ent = -torch.sum(F.softmax(output, dim=1) * F.log_softmax(output, dim=1), dim = 1) * ent_coeff
+    output = F.softmax(output, dim = 1).view(-1, height, width)
+    torch_targets = torch_targets.view(-1, height, width)
+    # have to make output shaped like a power of 2 for sinkhorn_images to work
+    np2 = utils.nearest_power_of_two(max(height, width))
+    height_diff = (np2 - height)//2
+    width_diff = (np2 - width)//2
+    output = torch.nn.functional.pad(output, (height_diff, height_diff, width_diff, width_diff)).view(-1, 1, np2, np2)
+    torch_targets = torch.nn.functional.pad(torch_targets, (height_diff, height_diff, width_diff, width_diff)).view(-1, 1, np2, np2)
+    loss = sinkhorn_images.sinkhorn_divergence(output, torch_targets, scaling = 0.7) - ent
+    loss = torch.sum(loss)/output.size(0)
     return
 
 
@@ -89,6 +100,7 @@ def train_2drnn_geomloss(model_params, dataset, device, model = None):
     # should the fusion net parameters be excluded from this? 
     optimizer = torch.optim.Adam(model.parameters(), lr = lr)
 
+    # TODO: clean up constant size changes, etc.
     for epoch in range(model_params["n_epochs"]):
         losses = [] 
         for num, batch in enumerate(train_loader):
@@ -122,17 +134,7 @@ def train_2drnn_geomloss(model_params, dataset, device, model = None):
                 input = torch.cat((input, out_and_terrain.float()), dim=1)
               output = out.view(-1, height, width)
             output = output.view(-1, height*width)
-            ent = -torch.sum(F.softmax(output, dim=1) * F.log_softmax(output, dim=1), dim = 1)
-            output = F.softmax(output, dim = 1).view(-1, height, width)
-            torch_targets = torch_targets.view(-1, height, width)
-            # how did I calculate what size this was? was this from the gaussian blur?
-            # was it to make the size the nearest power of two? -- that would make the most sense
-            output = torch.nn.functional.pad(output, (12, 12, 22, 22)).view(-1, 1, 64, 64)
-            torch_targets = torch.nn.functional.pad(torch_targets, (12, 12, 22, 22)).view(-1, 1, 64, 64)
-            loss = sinkhorn_images.sinkhorn_divergence(output, torch_targets, scaling = 0.7)
-            # TODO: how should this be tuned? What is the right conditioning for this?
-            loss = loss - 1/5000 * ent
-            loss = torch.sum(loss)/output.size(0)
+            loss = calc_geom_loss(output, target, ent_coeff, height, width)
             try:
               loss.backward()
             except RuntimeError:
@@ -144,7 +146,6 @@ def train_2drnn_geomloss(model_params, dataset, device, model = None):
               print("Epoch", epoch, "Batch ", num, "Loss:", loss.item())
           print('Epoch: {}/{}.............'.format(epoch, n_epochs), end=' ')
           print("Loss: {:.4f}".format(np.mean(losses)))
- 
     return model
 
 def main():
