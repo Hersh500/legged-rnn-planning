@@ -104,6 +104,7 @@ class StanceState2D:
         derivs[8] = 0
         return derivs
 
+
 class Hopper2D:
     def __init__(self, constants):
         self.constants = constants
@@ -345,7 +346,7 @@ def generateTerrain2D(params, feature_info):
 
 
 # disc is the length of one side of each square (discretized)
-def generateRandomStepTerrain2D(max_x, max_y, disc, num_steps):
+def generateRandomStepTerrain2D(params, num_ditches):
     # max width in any single dimension
     max_width = 2
     min_width = 1
@@ -353,13 +354,17 @@ def generateRandomStepTerrain2D(max_x, max_y, disc, num_steps):
     max_height = 0.6
     min_height = 0.1
 
+    disc = params["disc"]
+    x_min = params["corner_val_m"][0]
+    y_min = params["corner_val_m"][1]
+
     terrain_array = np.zeros((int(params["max_y"]/disc), int(params["max_x"]/disc)))
     hmap = HeightMap(terrain_array, params)
     prev_ditch_end_x = params["corner_val_m"][0]
     prev_ditch_end_y = params["corner_val_m"][1]
     for _ in range(num_ditches):
-        cur_ditch_x = np.random.uniform(1, params["max_x"])
-        cur_ditch_y = np.random.uniform(0, params["max_y"])
+        cur_ditch_x = np.random.uniform(x_min + 1, params["max_x"])
+        cur_ditch_y = np.random.uniform(y_min, params["max_y"])
         cur_ditch_x_width = np.random.uniform(min_width, max_width)
         cur_ditch_y_width = np.random.uniform(min_width, max_width)
         
@@ -387,8 +392,8 @@ def generateRandomTerrain2D(params, num_ditches):
     terrain_array = np.zeros((int((params["max_y"] - y_min)/disc), int((params["max_x"] - x_min)/disc)))
     hmap = HeightMap(terrain_array, params)
     for _ in range(num_ditches):
-        cur_ditch_x = np.random.uniform(1, params["max_x"])
-        cur_ditch_y = np.random.uniform(0, params["max_y"])
+        cur_ditch_x = np.random.uniform(x_min + 1, params["max_x"])
+        cur_ditch_y = np.random.uniform(y_min, params["max_y"])
         cur_ditch_x_width = np.random.uniform(min_width, max_width)
         cur_ditch_y_width = np.random.uniform(min_width, max_width)
         
@@ -396,8 +401,6 @@ def generateRandomTerrain2D(params, num_ditches):
         prev_ditch_end_y = cur_ditch_y + cur_ditch_y_width
         start_row, start_col = hmap.m_to_idx((cur_ditch_x, cur_ditch_y))
         end_row, end_col = hmap.m_to_idx((prev_ditch_end_x, prev_ditch_end_y))
-        print(f"start, end rows:{start_row, end_row}")
-        print(f"start, end cols:{start_col, end_col}")
         hmap.terrain_array[start_row:end_row, start_col:end_col] = -1  # TODO: vary this depth
     return hmap
 

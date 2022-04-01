@@ -7,17 +7,28 @@ from scipy.integrate import ode, odeint
 
 ### LOW LEVEL ROBOT FUNCTIONS ###
 class Constants:
-    def __init__(self):
-        # self.k = 2800  # Spring Constant, N/m
-        self.L = 0.5  # length of leg in flight
-        self.Lf = 0.3 # length of unsprung part of leg
-        self.g = -9.8
-        self.m = 7  # kg
-        self.k = 3200
-        self.u = 1
-        self.Lk0 = 0.2 # length of uncompressed spring
-        self.Cd = 0.5
-        self.eps = 1e-2
+    def __init__(self, config = None):
+        if config is None:
+            # self.k = 2800  # Spring Constant, N/m
+            self.L = 0.5  # length of leg in flight
+            self.Lf = 0.3 # length of unsprung part of leg
+            self.g = -9.8
+            self.m = 7  # kg
+            self.k = 3200
+            self.u = 1
+            self.Lk0 = 0.2 # length of uncompressed spring
+            self.Cd = 0.5
+            self.eps = 1e-2
+        else:
+            self.L = config["L"]
+            self.Lf = config["Lf"]
+            self.Lk0 = config["Lk0"]
+            self.g = config["g"]
+            self.m = config["m"]
+            self.k = config["k"]
+            self.Cd = config["Cd"]
+            self.eps = config["eps"]
+            self.u = 1  # deprecated, now friction is part of the heightmap
 
 
 class CassieConstants:

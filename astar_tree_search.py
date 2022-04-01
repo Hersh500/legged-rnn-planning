@@ -870,10 +870,12 @@ def RNNGuidedAStar2D(robot, step_controller, conv_rnn_planner, x0_apex, goal_sta
     steps = path_from_parent2(goal_nodes[0])
     return steps, total_odes
 
+
 def cost_fn2d(state, neighbors, apex, goal_state, step):
     x = state[0]
     y = state[1]
     return np.abs(x - goal_state[0]) + np.abs(y - goal_state[1])
+
 
 def terrain_func(x, y):
     if x >= 1 and x <= 3 and y >= 0 and y <= 1:
@@ -899,7 +901,6 @@ def main():
     cost_fn = cost_fn2d
     all_locs, all_angles, odes = angleAstar2Dof(robot, initial_apex, goal, 12, 
                            3, cost_fn, hmap, get_full_tree = False)
-    print(all_locs)
     return
 
 if __name__ == "__main__":

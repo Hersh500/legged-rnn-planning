@@ -1,7 +1,10 @@
-import multiprocessing as mp
+# import multiprocessing as mp
+from pathos.multiprocessing import ProcessingPool as Pool
 import numpy as np
 import argparse
 import os
+import yaml
+import shutil
 
 import hopper
 import hopper2d
@@ -23,16 +26,47 @@ def generate_gap_data_Cassie(dataset_params, generate_heightmaps=True, num_procs
 
 
 def generate_data_SLIP(dataset_params):
-    return
+    raise NotImplementedError("Using this script for 1D SLIP hasn't been implemented yet")
 
 
-# TODO: rework generateRandomSequences2D to use new heightmap class...
-def generate_data_SLIP2D(dataset_params, num_proc):
+def generate_data_2DSLIP(dataset_params):
     # create the robot model
-    robot = hopper2d.Hopper2D(hopper.Constants)
-    # create the desired cost function
-    def cost_function(node):
-        return
+    robot = hopper2d.Hopper2D(hopper.Constants(dataset_params["robot_params"]))
+    cparams = dataset_params["cost_fn"]
+    x_pen = cparams["x_dist"]
+    y_pen = cparams["y_dist"]
+    xdot_pen = cparams["xdot"]
+    ydot_pen = cparams["ydot"]
+    xacc = cparams["x_acc"]
+    yacc = cparams["y_acc"]
+    spread_pen = cparams["spread"]
+
+    def cost_function(x_flight, neighbors, prev_flight, goal, p):
+        x_pos = x_flight[0]
+        y_pos = x_flight[1]
+
+        x_vel = x_flight[3]
+        y_vel = x_flight[4]
+
+        last_x_vel = prev_flight[3]
+        last_y_vel = prev_flight[4]
+
+        spread = 0
+        for n in range(len(neighbors)):
+            x_dist = (neighbors[n][0] - x_pos)**2
+            y_dist = (neighbors[n][1] - y_pos)**2
+            spread += np.sqrt(x_dist + y_dist)/len(neighbors)
+
+        # downweight y acceleration cost
+        acc_term = xacc * np.sqrt((last_x_vel - x_vel)**2) + yacc * np.sqrt((last_y_vel - y_vel)**2)
+        # should I use euclidean or manhattan?
+        pos_term = np.sqrt(x_pen * np.abs(x_pos - goal[0])**2 + y_pen * np.abs(y_pos - goal[1])**2)
+        vel_term = xdot_pen * np.abs(x_vel - goal[2]) + ydot_pen * np.abs(y_vel - goal[3])
+        spread_term = spread_pen * spread
+
+        return pos_term + vel_term + acc_term + spread_term
+
+    f = lambda x: dataset_generation.generateSLIPSequences2D(*x)
 
     def gen_args(seed):
         return (robot,
@@ -40,18 +74,18 @@ def generate_data_SLIP2D(dataset_params, num_proc):
                 dataset_params["num_states"],
                 dataset_params["num_seqs_per"],
                 dataset_params["min_num_steps"],
-                dataset_params["friction"],
+                dataset_params["hmap_info"],
+                dataset_params["init_state_lims"],
+                dataset_params["goal"],
                 cost_function,
                 False,
                 False,
                 dataset_params["min_progress_per_step"],
-                dataset_params["max_x"],
-                dataset_params["max_y"],
-                dataset_params["disc"], seed)
+                seed)
 
-    all_args = [gen_args(seed) for seed in np.random.choice(1000, num_proc, replace=False)]
-    p = mp.Pool(processes=num_proc)
-    return_val_array = p.starmap(dataset_generation.generateRandomSequences2D, all_args)
+    all_args = [gen_args(seed) for seed in np.random.choice(1000, dataset_params["num_proc"], replace=False)]
+    p = Pool(processes=dataset_params["num_proc"])
+    return_val_array = p.map(f, all_args)
     all_initial_states = []
     all_sequences = []
     all_terrains = []
@@ -72,11 +106,9 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=str, help="path to dataset config file", required = True)
     parser.add_argument("--robot", type=str, help="slip, 2dslip, or cassie", required = True)
-    parser.add_argument("--num_procs", type=int, help="number of processors to use", default = 10)
     args = parser.parse_args()
     config_fname = args.config
     robot = args.robot
-    num_procs = args.num_procs
 
     with open(config_fname, 'r') as f:
         config = yaml.safe_load(f)
@@ -84,7 +116,7 @@ def main():
     if robot == "slip":
         print("SLIP dataset generation not yet added to this script. Goodbye!")
     if robot == "2dslip":
-        all_sequences, all_states, all_terrains = generate_data_2DSLIP(config, num_procs)
+        all_sequences, all_states, all_terrains = generate_data_2DSLIP(config)
     if robot == "cassie":
         all_sequences, all_states, all_terrains = generate_gap_data_Cassie(config, True, num_procs)
 

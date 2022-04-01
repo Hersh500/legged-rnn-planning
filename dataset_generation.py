@@ -2,7 +2,7 @@ import numpy as np
 
 import hopper
 import hopper2d
-from heightmap import Heightmap 
+from heightmap import HeightMap 
 import astar_tree_search
 from astar_tree_search import aStarHelper
 import terrain_utils
@@ -288,13 +288,14 @@ def generateSequencesForScenario(robot,
 
 
 # should parameterize everything: max_z, min_x_dot, etc.
-def generateSequences2D(robot,
+def generateSLIPSequences2D(robot,
                         num_terrains,
                         num_apexes,
                         num_astar_sequences,
                         min_steps,
                         hmap_params,
                         state_lims,
+                        goal,
                         cost_fn = astar_tree_search.stateCost,
                         full_tree = False,
                         only_ditch = False,
@@ -326,7 +327,7 @@ def generateSequences2D(robot,
     max_num_steps = min(6, num_terrains//2+1)
 
 
-  offset = 5
+  offset = 4
   # Generate the training terrains
   for num_ditches in range(offset, offset + max_num_ditches):
     if not only_ditch:
@@ -351,7 +352,7 @@ def generateSequences2D(robot,
     initial_state.xdot = np.random.rand() * (max_x_dot - min_x_dot) + min_x_dot
     initial_state.ydot = np.random.rand() * (max_y_dot - min_y_dot) + min_y_dot
     initial_state.z = np.random.rand() * (max_z - min_z) + min_z
-    initial_state.y = until_y//2  # RNN always starts at the left end of the array, in the middle y
+    initial_state.y = 0  # ideally, should break this out at some point
     initial_state.zf = initial_state.z - robot.constants.L
 
     state_array = initial_state.getArray()
@@ -366,7 +367,7 @@ def generateSequences2D(robot,
       s, t, i_s = generateSequencesForScenario(robot,
                                             hmap,
                                             initial_apex,
-                                            [until_x, until_y//2,0,0],
+                                            goal,
                                             cost_fn,
                                             num_astar_sequences,
                                             full_tree,
@@ -374,13 +375,14 @@ def generateSequences2D(robot,
       sequences += s
       initial_terrains += t
       initial_states += i_s
+      print(f"finished one scenario of terrain {i}")
     print("finished terrain", i)
 
   # TODO: now, terrains is a nasty pickled array of python classes. Is this an issue?
-  np.save(path + "terrains_" + str(seed), initial_terrains)
-  np.save(path + "sequences_" + str(seed), sequences)
-  np.save(path + "states_" + str(seed), initial_states)
-  print("saved files")
+  # np.save(path + "terrains_" + str(seed), initial_terrains)
+  # np.save(path + "sequences_" + str(seed), sequences)
+  # np.save(path + "states_" + str(seed), initial_states)
+  # print("saved files")
   return initial_states, initial_terrains, sequences
 
 
@@ -599,6 +601,13 @@ def generateRandomSequences2(robot,
 
     print("finished terrain", i)
   return initial_states, sequences
+
+
+def main():
+    # test some dataset generation
+    state_lims = {"z": {"min": 0.7, "max":1.5}, "xdot":{"min":0, "max":1}, "ydot":{"min":-0.5, "max":0.5}} 
+    seqs, terrains, states = generateSLIPSequences2D()
+    return
 
 
 if __name__ == "__main__":
