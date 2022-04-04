@@ -54,7 +54,8 @@ def runOneOptimization(config_lims, param_names, terrain_file, ofname, seed):
             reader = csv.reader(csvfile)
             for row in reader:
                 step_sequence.append([float(row[0]), float(row[1])])
-    return step_sequence, initial_state
+    terrain = heightmap.HeightMapFromCSV(terrain_file) 
+    return step_sequence, terrain, initial_state
 
 
 # generate some random dataset with some gaps.
@@ -84,6 +85,29 @@ def generateGapMaps(num_heightmaps, max_num_gaps, heightmap_info, path):
     return total_count
 
 
+def generateStairsMaps(num_heightmaps, max_num_steps, heightmap_info, path):
+    if not os.path.exists(path):
+        os.mkdir(path)
+    num_each = num_heightmaps//(max_num_steps+1)
+    num_steps = 0
+    total_count = 0
+    min_stair_size = 0.3
+    max_stair_size = 1
+    while num_stairs < max_num_stairs+1:
+        for i in range(num_each):
+            stair_xs = []
+            stair_heights = []
+            prev_x_end = 0.2
+            for _ in range(num_gaps):
+                step_start = prev_x_end + np.random.uniform(min_step_size, max_step_size)
+                step_xs.append(step_start)
+                prev_x_end = step_start
+            stairHeightMap(heightmap_info, stair_xs, stair_heights).save(os.path.join(path, str(total_count) + ".csv"))
+            total_count += 1
+        num_gaps += 1
+    return
+
+
 def generateFullDataset(num_heightmaps, num_init_states, random_params, config_lims, terrains_folder, max_num_procs = 20):
     if not os.path.isabs(terrains_folder):
         terrains_folder = os.path.join(os.getcwd(), terrains_folder)
@@ -105,10 +129,10 @@ def generateFullDataset(num_heightmaps, num_init_states, random_params, config_l
         print(f"finished up to {counter}/{len(schedule)}")
         for i, arr in enumerate(return_val_array):
             if len(arr[0]) > 0:
-                all_terrains.append(terrains[i])
-                all_initial_states.append(arr[1])
                 all_sequences.append(arr[0])
-    return all_sequences, all_initial_states, all_terrains
+                all_terrains.append(arr[1].terrain_array)
+                all_initial_states.append(arr[2])
+    return all_sequences, all_terrains, all_initial_states
 
 
 def testHeightMapPlotting():
@@ -142,6 +166,7 @@ def main():
     np.save(os.path.join(terrains_folder, "all_sequences.npy"), all_sequences)
     np.save(os.path.join(terrains_folder, "all_states.npy"), all_states)
     np.save(os.path.join(terrains_folder, "all_terrains.npy"), all_terrains)
+    # heightmap params is included in this!.
     shutil.copyfile(config_fname, os.path.join(terrains_folder, "config.yaml"))
     
 

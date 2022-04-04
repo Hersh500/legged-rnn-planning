@@ -1,0 +1,12 @@
+---
+init_data_dim: 3
+max_x:  8
+max_y: 4
+disc: 0.2
+hidden_dim:  32
+n_layers: 1
+terrain_dim: 128
+
+training_params:
+    lr: 1e-4
+    batch_size: 64

@@ -13,17 +13,34 @@ import dataset_generation
 
 # Set generate_heightmaps to False if they have
 # already been generated.
-def generate_gap_data_Cassie(dataset_params, generate_heightmaps=True, num_procs = 20):
+def generate_gap_data_Cassie(dataset_params, generate_heightmaps=True):
     hmap_info = dataset_params["hmap_info"]
     num_heightmaps = dataset_params["num_heightmaps"]
     num_sequences = dataset_params["num_sequences"]
     hmap_folder = dataset_params["terrains_folder"]
     max_num_gaps = dataset_params["max_num_gaps"]
+    random_param_names = ["num_steps", "init_x_vel", "init_y_vel", "T", "goal_x"]
 
     num_maps_made = towr_interface.generateGapMaps(num_heightmaps, max_num_gaps, hmap_info, hmap_folder)
-    all_sequences, all_states, all_terrains = towr_interface.generateFullDataset(num_maps_made, num_sequences, random_param_names, dataset_params, hmap_folder, num_procs)
-    return all_sequences, all_states, all_terrains
+    return towr_interface.generateFullDataset(num_maps_made, num_sequences, random_param_names, dataset_params, hmap_folder, num_procs)
 
+
+def generate_stair_data_Cassie(dataset_params, dataset_path, generate_heightmaps=True):
+    hmap_info = dataset_params["hmap_info"]
+    num_heightmaps = dataset_params["num_heightmaps"]
+    num_sequences = dataset_params["num_sequences"]
+    # hmap_folder_name = dataset_params["terrains_folder"]
+    max_num_steps = dataset_params["max_num_steps"]
+    num_procs = dataset_params["num_procs"]
+    random_param_names = ["num_steps", "init_x_vel", "init_y_vel", "T", "goal_x"]
+
+    if generate_heightmaps:
+        num_maps_made = towr_interface.generateStairsMaps(num_heightmap, max_num_steps, hmap_info, dataset_path)
+    else:
+        # todo: read num maps made from the heightmaps folder
+        num_maps_made = None
+
+    return towr_interface.generateFullDataset(num_maps_made, num_sequences, random_param_names, dataset_params, dataset_path, num_procs)
 
 def generate_data_SLIP(dataset_params):
     raise NotImplementedError("Using this script for 1D SLIP hasn't been implemented yet")
@@ -99,7 +116,7 @@ def generate_data_2DSLIP(dataset_params):
             all_terrains.append(initial_terrains[i])
             all_sequences.append(sequences[i])
 
-    return all_sequences, all_initial_states, all_terrains
+    return all_sequences, all_terrains, all_initial_states
 
 
 def main():
@@ -113,14 +130,15 @@ def main():
     with open(config_fname, 'r') as f:
         config = yaml.safe_load(f)
     
+    dataset_dir = os.path.join("datasets/", os.path.split(config_fname)[1][:-5] + "_" + robot)
     if robot == "slip":
         print("SLIP dataset generation not yet added to this script. Goodbye!")
     if robot == "2dslip":
-        all_sequences, all_states, all_terrains = generate_data_2DSLIP(config)
+        all_sequences, all_terrains, all_states = generate_data_2DSLIP(config)
     if robot == "cassie":
-        all_sequences, all_states, all_terrains = generate_gap_data_Cassie(config, True, num_procs)
+        # all_sequences, all_states, all_terrains = generate_gap_data_Cassie(config, True, num_procs)
+        all_sequences, all_terrains, all_stairs = generate_gap_data_Cassie(config, True, num_procs)
 
-    dataset_dir = os.path.join("datasets/", os.path.split(config_fname)[1][:-5] + "_" + robot)
     if not os.path.exists(dataset_dir):
         os.mkdir(dataset_dir)
     np.save(os.path.join(dataset_dir, "all_sequences.npy"), all_sequences)

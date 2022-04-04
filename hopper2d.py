@@ -339,8 +339,8 @@ def generateTerrain2D(params, feature_info):
     for feat in feature_info:
         x_idx = int(feat[0]/disc)
         y_idx = int(feat[1]/disc)
-        x_end = int((feat[0] + ditch[2])/disc)
-        y_end = int((feat[1] + ditch[3])/disc)
+        x_end = int((feat[0] + feat[2])/disc)
+        y_end = int((feat[1] + feat[3])/disc)
         terrain_array[y_idx:y_end, x_idx:x_end] = feat[4]
     return HeightMap(terrain_array, params)
 

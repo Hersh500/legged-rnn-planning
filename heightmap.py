@@ -125,11 +125,29 @@ def randomDitchHeightMap(max_x, max_y, disc, friction, num_ditches):
     return hopper2d.generateRandomTerrain2D(heightmap_info, num_ditches) 
 
 
+def stairHeightMap(heightmap_info, stair_xs, stair_heights):
+    x0 = heightmap_info["corner_val_m"][0]
+    y0 = heightmap_info["corner_val_m"][1]
+    stair_xs = stair_xs + [heightmap_info["max_x"]]
+
+    stair_info =  [[stair_xs[i] - x0, 0, stair_xs[i+1] - stair_xs[i], heightmap_info["max_y"] - y0, stair_heights[i]] for i in range(len(stair_heights))]
+    return hopper2d.generateTerrain2D(heightmap_info, stair_info)
+
+
 def gapHeightMap(heightmap_info, gap_xs, gap_widths):
     x0 = heightmap_info["corner_val_m"][0]
     y0 = heightmap_info["corner_val_m"][1]
 
     gap_info =  [[gap_xs[i] - x0, 0, gap_widths[i], heightmap_info["max_y"] - y0] for i in range(len(gap_xs))]
-    terrain_array, terrain_func = hopper2d.generateTerrain2D(heightmap_info["max_x"] - x0, heightmap_info["max_y"] - y0,
-                                                             heightmap_info["disc"], gap_info)
-    return HeightMap(terrain_array, heightmap_info)
+    return hopper2d.generateTerrain2D(heightmap_info, gap_info)
+
+
+def main():
+    stair_x = [1, 2]
+    stair_height = [0.5, 1]
+    info = {"max_x": 4, "max_y": 2, "padding":0.25, "corner_val_m":[0, -2], "friction":0.8, "disc":0.1}
+    hmap = stairHeightMap(info, stair_x, stair_height)
+    hmap.plotSteps([])
+
+if __name__ == "__main__":
+    main()
