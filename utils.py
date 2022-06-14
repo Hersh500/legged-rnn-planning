@@ -64,12 +64,12 @@ def plot_terrain(ax, x_minus, x_plus, terrain_func, fill = False):
     return
 
 
-def plotRobotWithArrow(ax, initial_apex, no_arrow = False, foot_pos = None):
-    ax.scatter(initial_apex[0], initial_apex[1], s=500, color = "blue")
+def plotRobotWithArrow(ax, initial_apex, no_arrow = False, foot_pos = None, color="blue"):
+    ax.scatter(initial_apex[0], initial_apex[1], s=500, color = color)
     if foot_pos is None:
         foot_pos = (initial_apex[0], initial_apex[1] - 0.5)
-    ax.scatter(foot_pos[0], foot_pos[1], s = 100, color = "blue")
-    ax.plot([initial_apex[0], foot_pos[0]], [initial_apex[1], foot_pos[1]], color = "blue")
+    ax.scatter(foot_pos[0], foot_pos[1], s = 100, color = color)
+    ax.plot([initial_apex[0], foot_pos[0]], [initial_apex[1], foot_pos[1]], color=color)
       
     # plot an arrow representing the robot's forward velocity
     if not no_arrow:
@@ -114,7 +114,8 @@ def plotManyProbabilitiesOverTerrain(prev_steps,
                                  colors,
                                  title_text = None,
                                  fname = None,
-                                 outside_axis= None):
+                                 outside_axis= None,
+                                 no_arrow = False):
   if outside_axis is None:
     fig = plt.figure()
     ax = plt.gca()
@@ -131,7 +132,7 @@ def plotManyProbabilitiesOverTerrain(prev_steps,
     s_normed = s/(np.max(s))
     ax.plot(pos_array, s_normed, color = c)
 
-  plotRobotWithArrow(ax, initial_apex)
+  plotRobotWithArrow(ax, initial_apex, no_arrow = no_arrow)
   '''
   # plot the robot
   ax.scatter(initial_apex[0], initial_apex[1], s=500, color = "blue")
